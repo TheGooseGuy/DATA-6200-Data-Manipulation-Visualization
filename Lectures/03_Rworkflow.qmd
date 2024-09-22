@@ -1,0 +1,541 @@
+---
+title: "R for Data Science continued"
+author: "DATA*6200"
+date: "Sept 16, 2024"
+format: 
+  revealjs:
+    echo: true
+    code-line-numbers: false
+    slide-number: true
+---
+
+## Learning objectives and reading
+
+::: columns
+::: {.column width="50%"}
+-   More dplyr verbs and base-R operations for data manipulation
+-   Coding style for readibility and reproducibility
+-   Tidy data formats
+-   Wide vs. long data
+:::
+
+::: {.column width="50%"}
+Some reading:
+
+-   R for Data Science chapters 4-5. This lecture borrows heavily from these chapters
+:::
+:::
+
+```{r, include = FALSE}
+library(tidyverse)
+library(nycflights13)
+```
+
+# More dplyr and Base-R
+
+## group_by + summarize combo
+
+Suppose we wanted to know the average departure delay of each airline when flying to George Bush International.
+
+. . .
+
+I can use the `group_by` and `summarise` combo to average (or any operation) one variable for each value of another variable. Example:
+
+. . .
+
+```{r}
+flights |> 
+  filter(dest == "IAH") |> 
+  group_by(carrier) |> 
+  summarise(mean_dep_delay = mean(dep_delay, na.rm=TRUE))
+```
+
+## Arrange + practice
+
+There are many dplyr verbs out there. `arrange(column_name)` sorts the data frame in ascending order based on the values in column_name (if values are characters, it will do alphabetical).
+
+. . .
+
+`arrange(desc(column_name))` will sort the data frame in descending order.
+
+. . .
+
+**What *destination* airport has the height average departure delay?** Hint: use a `group_by()` + `summarise` combo, followed by `arrange()`.
+
+## New column based on existing columns
+
+*mutate* creates a new column based on operations on existing columns. Maybe you want to convert departure delay times to hours:
+
+. . .
+
+```{r}
+flights |> 
+  mutate(dep_delay_hours = dep_delay/60) |> 
+  select(dep_delay_hours, dep_delay, carrier,origin) |> 
+  head()
+
+```
+
+## New column based on existing columns
+
+Or maybe you want the difference between departure and arrival delays, to see how much time was "made up" or "lost" in the air:
+
+. . .
+
+```{r}
+flights |> 
+  mutate(made_up_time = arr_delay - dep_delay) |> 
+  select(made_up_time, carrier, origin) |> 
+  head()
+```
+
+## %in%
+
+`%in%` is a base R operator that checks if left side is contained in right-side, evaluated component-wise
+
+. . .
+
+```{r}
+x <- c(1,3,5)
+y <- c(1,3,6)
+
+x %in% y
+```
+
+. . .
+
+Particularly useful when using `filter`. E.g if I want all flights who's destination was LAX, JFK, or BOS, I could use:
+
+```{r}
+flights |> 
+  filter(dest %in% c("LAX", "JFK", "BOS")) |> 
+  select(dest, dep_delay) |> 
+  head()
+
+```
+
+## Slicing
+
+slicing allows for extraction of specific rows within a group
+
+. . .
+
+``` r
+df |> slice_head(n = 1) first row from each group. See also: slice_tail
+df |> slice_max(x, n = 1)  row with largest value of column x. See also: slice_min
+df |> slice_sample(n = 1) takes one random row.
+```
+
+. . .
+
+For each origin airport, what destination has the highest average departure delay?
+
+. . .
+
+```{r}
+flights |> 
+  group_by(origin, dest) |>
+  summarise(mean_dep_delay = mean(dep_delay, na.rm= TRUE)) |> 
+  group_by(origin) |> 
+  slice_max(mean_dep_delay, n=1)
+```
+
+## .by argument in summarize
+
+Instead of using group_by, you can use the `.by` argument in summarise instead. This is new to me. Repeating previous slide example:
+
+. . .
+
+```{r}
+flights |> 
+  summarise(
+    mean_dep_delay = mean(dep_delay, na.rm= TRUE),
+    .by = c(origin,dest)
+    ) |> 
+  group_by(origin) |> 
+  slice_max(mean_dep_delay, n=1)
+```
+
+## Conditions, if, ifelse, and case_when
+
+`if` statements exist in almost any coding language. In R, `if` is not vectorized:
+
+. . .
+
+``` r
+x = c(1,3,5)
+
+if(x<2) "hooray"
+
+#Error in if (x < 2) "hooray" : the condition has length > 1
+```
+
+. . .
+
+But `ifelse` is
+
+```{r}
+ifelse(x<2, "hooray", "boo")
+```
+
+## ifelse vs. case_when
+
+Despite `ifelse` being vectorized, it still may require many ifelse statements to get what you want.
+
+. . .
+
+```{r}
+ifelse(x==1,"a",
+       ifelse(x==3, "b",
+              ifelse(x==5, "c", "boo")))
+
+```
+
+. . .
+
+vs. dplyr's `case_when`
+
+. .
+
+```{r}
+case_when(
+  x == 1 ~ "a",
+  x == 3 ~ "b",
+  x == 5 ~ "c",
+  TRUE   ~ "boo"  # Think "else"
+)
+```
+
+# Good Coding practices
+
+## Good coding practices
+
+There is no one "correct" way to organize your code and name your objects. I will make some recommendations based on *R for Data Science* and my own experience.
+
+. . .
+
+When **naming objects**, use descriptive, lower case words separated by an underscore:
+
+. . .
+
+Good:
+
+```{r}
+short_flights <- flights |> filter(air_time < 60)
+```
+
+. . .
+
+not as good:
+
+. . .
+
+```{r}
+sflights <- flights |> filter(air_time < 60) # unclear what s is
+sf <- flights |> filter(air_time < 60) # fast to type...but unclear
+data2 <- flights |> filter(air_time < 60) # AWFUL, please don't
+```
+
+## Use spaces
+
+Use spaces on either side of +, - , ==, \<-:
+
+. . .
+
+```{r}
+x <- (2 + 3)^2 / 2 # good
+x <- (2+3) ^ 2/2 # not as good
+x <- (2+3)^2/2 # not as good
+```
+
+. . .
+
+In my mind, I use spaces to reinforce order of operations.
+
+. . .
+
+Spaces before commas, after function names, and on the inner side of brackets are a no-no:
+
+``` r
+mean(x, na.rm = TRUE) # good
+mean (x , na.rm=TRUE) # not as good
+```
+
+## Pipes and dplyr verbs
+
+-   `|>` Should have spaces on either side. When you use the hotkey "Ctrl + shift + m", this will happen automatically.
+
+. . .
+
+-   When doing sequential dplyr-like data wrangling, it is good practice to put the pipe last on each line:
+
+. . .
+
+```{r, results='hide'}
+# Good 
+flights |>  
+  filter(!is.na(arr_delay), !is.na(tailnum)) |> 
+  count(dest)
+```
+
+. . .
+
+```{r, results='hide'}
+# Not as good
+flights|>filter(!is.na(arr_delay), !is.na(tailnum))|>count(dest)
+```
+
+## Pipes and dplyr verbs
+
+When functions being piped have multiple or named arguments, it is good practice to put each on a separate line:
+
+. . .
+
+```{r, results = 'hide'}
+# good 
+flights |>  
+  group_by(tailnum) |> 
+  summarize(
+    delay = mean(arr_delay, na.rm = TRUE),
+    n = n()
+  )
+```
+
+. . .
+
+```{r, results = 'hide'}
+# not as good
+flights |>
+  group_by(
+    tailnum
+  ) |> 
+  summarize(delay = mean(arr_delay, na.rm = TRUE), n = n())
+```
+
+## Use hotkeys
+
+Learn hotkeys for your operating system. This will improve your coding efficiency. My personal favorites:
+
+::: incremental
+-   CTRL/CMD + 1 and CTRL/CMD + 2 Move between R script and console
+-   CTRL/CMD + enter runs the current line, or highlighted code section
+-   Shift + arrow keys allows you to highlight code sections
+-   CMD/CTRL + arrow keys allows you to navigate your code
+:::
+
+. . .
+
+If you find yourself reaching for your mouse for something, see if there is a hotkey and practice it.
+
+## Sectioning scripts
+
+CMD/CTRL + shift + R creates a section in your code. A hashtag followed by a space, title, and a symbol repeated (at least) 4 times will create a section.
+
+. . .
+
+Double hashtag creates subsections.
+
+```{r}
+# Data import ---------------------------------------------------------------
+
+# Data Cleaning ---------------------------------------------------------------
+
+# Analysis ---------------------------------------------------------------
+## Linear regression model -----------------------------------------------
+
+## XGBOOSTED NEURAL NETWORK CLOUD COMPUTING LLM -------------------------------
+
+```
+
+. . .
+
+Copy the above into a blank R script to see how this works.
+
+## Exercise
+
+Clean this up using the principles we just discussed:
+
+```{r, results = 'hide'}
+flights|>filter(carrier=="UA",dest%in%c("IAH","HOU"),sched_dep_time>
+0900,sched_arr_time<2000)|>group_by(flight)|>summarize(delay=mean(
+arr_delay,na.rm=TRUE),cancelled=sum(is.na(arr_delay)),n=n())|>filter(n>10)
+```
+
+# Tidy data formats
+
+## Tidy data formats
+
+The same information can be displayed in multiple ways.
+
+::: columns
+::: {.column width="45%"}
+```{r}
+head(table3, 4)
+```
+:::
+
+::: {.column width="55%"}
+```{r}
+head(table2, 6)
+```
+:::
+:::
+
+```{r}
+head(table1, 4)
+```
+
+## Tidy data principles
+
+::: incremental
+1.  Every variable is a column. Every column is a variable.
+2.  Each observation is a row; each row is an observation
+3.  Each value is a cell; each cell is a single value
+:::
+
+. . .
+
+Allows for **standardization**, such that functions (like Dplyr verbs) will behave predictably on the data.
+
+. . .
+
+Allows for **vectorization**, which greatly speeds up operations. Remember that data frames and tibbles are just named lists of vectors of the same length.
+
+## Tidy data principles (contd)
+
+1.  Every variable is a column. Every column is a variable.
+2.  Each observation is a row; each row is an observation
+3.  Each value is a cell; each cell is a single value
+
+. . .
+
+Is the following an example of tidy data? Why or why not?
+
+```{r, echo = FALSE}
+head(table2,6)
+```
+
+## Tidy data principles (contd)
+
+1.  Every variable is a column. Every column is a variable.
+2.  Each observation is a row; each row is an observation
+3.  Each value is a cell; each cell is a single value
+
+What about this one?
+
+. . .
+
+```{r, echo = FALSE}
+head(table3,6)
+```
+
+## Tidy data principles (contd)
+
+And this one?
+
+```{r, echo = FALSE}
+table1
+```
+
+. . .
+
+It is rare that the data you get from the real world will be tidy.
+
+# Wide vs. Long data
+
+## Wide data
+
+A classic example of data that is not tidy is data in **wide** format.
+
+. . .
+
+```{r}
+billboard[1:8,1:10]
+```
+
+. . .
+
+Why is the data not tidy? Think about what a tidy version of these data would look like. How many columns would it have?
+
+## Lengthening data
+
+Transforming your data from **wide** to **long** format can be done using `pivot_longer`
+
+. . .
+
+```{r}
+billboard |> 
+  pivot_longer(
+    cols = starts_with("wk"), 
+    names_to = "week", 
+    values_to = "rank"
+  ) 
+```
+
+## More complex example
+
+Often wide data will have variable names AND data...
+
+. . .
+
+```{r}
+head(household)
+```
+
+. . .
+
+Variable names are?
+
+. . .
+
+Data values are?
+
+## More complex example (contd)
+
+Need to use `.value` to tell pivot longer to make different variable names for both "name" and "dob":
+
+. . .
+
+```{r}
+household |> 
+  pivot_longer(
+    cols = !family, # all columns except family
+    names_to = c(".value", "child"), 
+    names_sep = "_", 
+    values_drop_na = TRUE
+  )
+```
+
+## Widening data using pivot_wider
+
+::: columns
+::: {.column width="50%"}
+Suppose we have some tidy, long data:
+
+```{r}
+df <- tribble(
+  ~id, ~measurement, ~value,
+  "A",        "bp1",    100,
+  "B",        "bp1",    140,
+  "B",        "bp2",    115, 
+  "A",        "bp2",    120,
+  "A",        "bp3",    105
+)
+```
+:::
+
+::: {.column width="50%"}
+We can make it wider using:
+
+```{r}
+
+df |> 
+  pivot_wider(
+    names_from = measurement,
+    values_from = value
+  )
+```
+:::
+:::
+
+Notice that the wide data is smaller in size!
