@@ -14,7 +14,7 @@ format:
 ::: columns
 ::: {.column width="50%"}
 -   More dplyr verbs and base-R operations for data manipulation
--   Coding style for readibility and reproducibility
+-   Coding style for readability and reproducibility
 -   Tidy data formats
 -   Wide vs. long data
 :::
