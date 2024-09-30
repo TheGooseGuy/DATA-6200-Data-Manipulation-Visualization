@@ -1,0 +1,591 @@
+---
+title: "Intro Data visualization in R"
+author: "DATA*6200"
+date: "Sept 30, 2024"
+format: 
+  revealjs:
+    echo: true
+    code-line-numbers: false
+    slide-number: true
+    width: 1500
+    height: 700
+---
+
+## Learning objectives and reading
+
+::: columns
+::: {.column width="50%"}
+- Grammar of Graphics
+- Aesthetics mappings
+- Geometries
+- Faceting
+
+:::
+
+::: {.column width="50%"}
+
+Reading:
+
+- R for Data Science Chapter 9
+- Fundamentals of Data Visualization Chapters 2,7
+
+
+:::
+:::
+
+# Graphing
+
+Examples taken from Data Science with R and fundamentals of data visualization.
+
+```{r, results = "hide"}
+library(tidyverse)
+library(palmerpenguins)
+```
+
+```{r}
+penguins
+```
+
+## Body Mass vs. flipper length
+
+::: columns
+::: {.column width="50%"}
+Consider the plot of flipper length vs. body mass shown below made in base R below
+
+```{.r}
+plot(x = penguins$flipper_length_mm, 
+     y = penguins$body_mass_g)
+```
+
+What are some choices that were made here?
+
+:::
+
+::: {.column width="50%"}
+
+```{r, fig.height = 8, echo = FALSE}
+plot(x= penguins$flipper_length_mm, 
+     y = penguins$body_mass_g)
+```
+:::
+:::
+
+## Choices
+
+Many of the choices in graph-making seem trivial, but they aren't.
+
+::: incremental
+- How should I map my data to the **aes**thetics of the graph?
+- What **geom**etric object should I use to display the data?
+- Does my data/preferred geometry require a statistical transformation?
+- Is it more effective to use multiple-subplots?
+:::
+
+## Grammar of graphics
+
+A **grammar of graphics** is a tool that we use to describe aspects of a graph.
+
+The grammar that are implemented in R's `ggplot2`:
+
+::: incremental
+-   Data to aesthetic mappings
+-   Geometric Objects
+-   Scales
+-   Faceting (making multiple subplots)
+-   Transformations
+-   Coordinate systems.
+:::
+
+. . .
+
+This grammar is **layered**, meaning that we can add each of these components in layers.
+
+. . .
+
+We can also include e.g multiple data to aes mappings in a single graph.
+
+## Base layer in GGPlot
+
+```{r}
+ggplot(penguins)
+```
+
+## Aesthetics mappings
+
+::: columns
+::: {.column width="50%"}
+First step in making a graph is to map data elements to aesthetics.
+
+``` r
+ggplot(penguins,
+       mapping = aes(x=flipper_length_mm, 
+                     y = body_mass_g))
+```
+
+Here, we are mapping data values to x and y positions. We could have mapped them to other things.
+
+`ggplot` makes axes reflective of the variables' values, but there is no geometry telling ggplot what to display.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(penguins,
+       mapping = aes(x=flipper_length_mm, 
+                     y = body_mass_g))+
+  theme(text=element_text(size = 22))# note this option is mainly to make the plots easier to see in the presentation
+```
+:::
+:::
+
+## Adding a geometry
+
+::: columns
+::: {.column width="50%"}
+`geom_point()` represents the mapping we just made using a single point.
+
+``` {.r code-line-numbers="|5"}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  y = body_mass_g)
+) + 
+  geom_point()
+```
+
+It is now obvious that flipper length and body mass are now mapped to **positions**.
+
+However, you can map this information to other things.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  y = body_mass_g)
+) + 
+  geom_point(size = 3)+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Mapping data to other things
+
+::: columns
+::: {.column width="50%"}
+For example, we can map the variable species to a colour:
+
+``` {.r code-line-numbers="|5"}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                col = species)
+) + 
+  geom_point()
+```
+
+Since species is a factor, there will be a clear separation between colours.
+
+This mapping helps us understand the relationship between variables for each species.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                col = species)
+) + 
+  geom_point(size = 3)+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Other mappings
+
+::: columns
+::: {.column width="50%"}
+Another example of a mapping, is to map to the size of the geometry. Similar to colour:
+
+``` {.r code-line-numbers="|5"}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                size = species)
+) + 
+  geom_point()
+```
+
+This mapping is not great. Why?
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                size = species)
+) + 
+  geom_point()+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Mappings vs. Graphical parameters
+
+::: columns
+::: {.column width="50%"}
+When we do things in the `aes()` function, this maps data to aspects of the graph. When the data changes, the graphics changes.
+
+If you want all points blue, do this in the `geom_point()` function:
+
+``` {.r code-line-numbers="|6"}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g)
+) + 
+  geom_point(col = "blue")
+```
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g)
+) + 
+  geom_point(col = "blue", size = 3)+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Other aesthetics
+
+::: columns
+::: {.column width="50%"}
+```{r , echo = FALSE, fig.height = 6}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                alpha = bill_depth_mm)
+) + 
+  geom_point(col = "blue", size = 3)+
+  theme(text=element_text(size = 22))
+```
+
+`alpha = bill_depth_mm`
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 6}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                shape = sex)
+) + 
+  geom_point(size = 3)+
+  theme(text=element_text(size = 22))
+```
+
+`shape = sex`
+:::
+:::
+
+## Geometries
+
+::: columns
+::: {.column width="50%"}
+``` {.r code-line-numbers="|7"}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g)
+) + 
+  geom_point()+
+  geom_smooth()
+```
+
+In statistics/ML, blue line is a **model**.
+
+In GoG, we think of this as another **geometry** to represent the position mappings.
+
+It could be used in place of the x/y coordinates (in theory).
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g)
+) + 
+  geom_point(size = 3)+
+  geom_smooth(size = 3)+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Not all geometries work with every mapping
+
+::: columns
+::: {.column width="50%"}
+```{r, fig.height = 6}
+ggplot(penguins,
+       aes(x = flipper_length_mm,  
+           y = body_mass_g,
+           shape = species)
+) + geom_smooth(size = 2)
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 6}
+ggplot(penguins,
+       aes(x = flipper_length_mm,  
+           y = body_mass_g,
+           linetype = species)
+) + geom_smooth(size = 2)
+```
+:::
+:::
+
+## Multiple mappings
+
+::: columns
+::: {.column width="50%"}
+If you want to do multiple aesthetic mappings with different geometries, you can do:
+
+``` {.r code-line-numbers="|7"}
+ggplot(penguins,
+       aes(x = flipper_length_mm,  
+           y = body_mass_g,
+           col = species)
+) + 
+  geom_point(size = 2)+
+  geom_smooth(aes(linetype = species), 
+              size = 2, 
+              se = FALSE)
+```
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE,fig.height = 8}
+ggplot(penguins,
+       aes(x = flipper_length_mm,  
+           y = body_mass_g,
+           col = species)
+) + 
+  geom_point(size = 2)+
+  geom_smooth(aes(linetype = species), 
+              size = 2, 
+              se = FALSE) +
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Bar geometries
+
+::: columns
+::: {.column width="50%"}
+`geom_point()`, `geom_line()`, `geom_smooth()` behave intuitively.
+
+`geom_bar()` takes a bit more experience.
+
+``` r
+penguins |> 
+  ggplot(
+    aes(x=species)
+  )+
+  geom_bar()
+```
+
+It will first `count()` by species, and use that as the default mapping for the y axis.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+penguins |> 
+  ggplot(
+    aes(x=species)
+  )+
+  geom_bar()
+```
+:::
+:::
+
+## Histogram geometries
+
+::: columns
+::: {.column width="50%"}
+When making a histogram, what are we trying to do?
+
+``` r
+penguins |> 
+  ggplot(
+    aes(x=flipper_length_mm)
+  )+
+  geom_hist()
+```
+
+It will bin the data and `count()` by bin, and use that as the default mapping for the y axis.
+
+The number of "bins" here will tell us how granular we want our estimate to be.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+penguins |> 
+  ggplot(
+    aes(x=flipper_length_mm)
+  )+
+  geom_histogram()
+```
+:::
+:::
+
+## Histogram geometries
+
+::: columns
+::: {.column width="50%"}
+When we have a bad number of bins, we miss key features of the data.
+
+``` r
+penguins |> 
+  ggplot(
+    aes(x=flipper_length_mm)
+  )+
+  geom_hist(bins = 5)
+```
+
+When we have a lot of data, we can use thin bins.
+
+But when we don't we have to use coarse bins, which are a bit problematic.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+penguins |> 
+  ggplot(
+    aes(x=flipper_length_mm)
+  )+
+  geom_histogram(bins = 5)
+```
+:::
+:::
+
+## Density estimates
+
+::: columns
+::: {.column width="50%"}
+Density estimates are a way of creating a smoother representation of the "distribution" of a variables.
+
+Just like `geom_smooth`, `geom_density` uses a model under the hood.
+
+This model helps with lower sample sizes
+
+``` r
+penguins |> 
+  ggplot(
+    aes(x=flipper_length_mm, 
+    fill = species) # new aes mapping!
+  )+
+  geom_density(alpha = 0.4)
+```
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+penguins |> 
+  ggplot(
+    aes(x=flipper_length_mm, fill = species)
+  )+
+  geom_density(alpha = 0.4) +
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Exercise
+
+`geom_boxplot` behaves similarly to `geom_density` and `geom_histogram`. Create a boxplot of the variable `body_mass_g` for each value of `sex`.
+
+
+## Faceting
+
+::: columns
+::: {.column width="50%"}
+**Facets** are subplots of one variable based on the value of a categorical variable.
+
+Instead of relying on colours to differentiate species, we can use subplots:
+
+``` r
+penguins |> 
+  ggplot(
+    aes(x = flipper_length_mm,  
+           y = body_mass_g)
+  )+
+  geom_point() +
+  facet_wrap(~species)
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 8, echo = FALSE}
+penguins |> 
+  ggplot(
+    aes(x = flipper_length_mm,  
+           y = body_mass_g)
+  )+
+  geom_point() +
+  facet_wrap(~species)+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Faceting (contd.)
+
+::: columns
+::: {.column width="50%"}
+If you want each plot to have it's own axis, you can use `scales = "free"`
+
+Furthermore, you can break it down by more than 1 variable, e.g sex and species:
+
+``` r
+penguins |> 
+  filter(!is.na(sex)) |> 
+  ggplot(
+    aes(x = flipper_length_mm,  
+           y = body_mass_g)
+  )+
+  geom_point() +
+  facet_wrap(sex~species, scales = "free")
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 8, echo = FALSE}
+penguins |> 
+  filter(!is.na(sex)) |> 
+  ggplot(
+    aes(x = flipper_length_mm,  
+           y = body_mass_g)
+  )+
+  geom_point() +
+  facet_wrap(sex~species, scales = "free")+
+  theme(text=element_text(size = 22))
+```
+:::
+:::
