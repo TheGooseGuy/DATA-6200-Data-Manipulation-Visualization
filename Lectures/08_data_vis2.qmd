@@ -1,0 +1,606 @@
+---
+title: "Data Vis in R Part 2"
+author: "DATA*6200"
+date: "Oct 2, 2024"
+format: 
+  revealjs:
+    echo: true
+    code-line-numbers: false
+    slide-number: true
+    width: 1500
+    height: 700
+---
+
+## Learning objectives and reading
+
+::: columns
+::: {.column width="50%"}
+
+- Statistical transformations
+- Positions
+- Coordinate systems
+- Making your plots look nicer
+    - Labels
+    - Annotations
+    
+:::
+
+::: {.column width="50%"}
+
+Reading:
+
+- Chapters 9 and 11 Data Science with R.
+
+:::
+:::
+
+# What you'll need:
+
+Examples taken from Data Science with R and fundamentals of data visualization.
+
+Graphs in the slides are meant to teach you things. These are not all good examples of effective data visualization.
+
+```{r, results = "hide"}
+library(tidyverse)
+library(palmerpenguins)
+```
+
+```{r}
+penguins |> head()
+```
+
+## Faceting precaution
+
+::: columns
+::: {.column width="50%"}
+Faceting can be an effective tool to convey a lot of information. But you should ensure each plot is large enough to read by itself.
+
+Some graphs that attempt to convey too much info end up conveying nothing.
+
+``` r
+penguins |> 
+  ggplot(
+    aes(x = flipper_length_mm,  
+           y = body_mass_g)
+  )+
+  geom_point() +
+  facet_grid(year~species)
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 8, echo = FALSE}
+penguins |> 
+  ggplot(
+    aes(x = flipper_length_mm,  
+           y = body_mass_g)
+  )+
+  geom_point() +
+  facet_grid(year~species) + 
+  theme(text=element_text(size = 18))
+```
+:::
+:::
+
+## Statistical Transformations
+
+We saw examples of visualizations where some "tranformed" version of the data was plotted.
+
+-   geom_smooth() computed a local regression to smooth the data
+-   geom_bar() counted the data by group
+-   geom_boxplot() computed a 5-number summary
+
+This is called a **statistical transformation** or a **stat**.
+
+## Statistical Transformation (Contd)
+
+::: columns
+::: {.column width="50%"}
+You have some control over the stat in ggplot.
+
+For example, in `geom_smooth()`, you can control the method of smoothing.
+
+``` r
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g)
+) + 
+  geom_point()+
+  geom_smooth(method = "lm")+
+  geom_smooth(col = "red")
+```
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height=8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g)
+) + 
+  geom_point()+
+  geom_smooth(method = "lm")+
+  geom_smooth(col = "red")
+```
+:::
+:::
+
+## Statistical Transformation (Contd)
+
+::: columns
+::: {.column width="50%"}
+Suppose you wanted to make a bar graph of the mean body mass by species.
+
+We need to override geom_bar's default stat of **count()**.
+
+``` r
+penguins |> 
+  group_by(species) |> 
+  summarise(mean_bm = mean(body_mass_g, na.rm=TRUE)) |> 
+  ggplot(aes(x=species, y=mean_bm))+
+    geom_bar(stat='identity')
+```
+
+Need to specify a y= in the `aes()` here because we are not mapping the the result of the count anymore, we are mapping **identically** to a value in the data.
+:::
+
+::: {.column width="50%"}
+```{r, fig.height=8, echo = FALSE}
+penguins |> 
+  group_by(species) |> 
+  summarise(mean_bm = mean(body_mass_g, na.rm=TRUE)) |> 
+  ggplot(aes(x=species, y=mean_bm))+
+    geom_bar(stat='identity') + 
+  theme(text=element_text(size = 18))
+  
+```
+:::
+:::
+
+## Position adjustments
+
+::: columns
+::: {.column width="50%"}
+An important consideration when plotting is the position of geometries relative to one another.
+
+Consider a plot of highway miles per gallon vs fuel displacement from the `mpg` dataset, 234 points.
+
+Notice anything peculiar?
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 8, echo = FALSE}
+mpg |> 
+  ggplot(aes(x=displ, y=hwy))+
+  geom_point(size = 3) + 
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Adjusting positions
+
+::: columns
+::: {.column width="50%"}
+There are a couple of ways to fix this.
+
+-   We can either add **jitter** to the points, which is a small amount of randomness so that points will stop "hiding" from us.
+
+-   could "dodge" the points, which tries to find an optimal separation of the points.
+
+``` r
+geom_point(position = "jitter")
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 8, echo = FALSE}
+mpg |> 
+  ggplot(aes(x=displ, y=hwy))+
+  geom_point(size = 3,
+             position = "jitter") + 
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Jittering
+
+::: columns
+::: {.column width="50%"}
+Jittering helps reveal hidden points.
+
+If you aren't careful, it may increase/decrease/create/remove statistical relationships in the data.
+
+How much jitter to use? Instead of `geom_point()`, can use `geom_jitter(height = , width =)` to control how much jitter is added.
+
+This can be **dangerous**.
+:::
+
+::: {.column width="50%"}
+```{r, fig.height = 8, echo = FALSE}
+mpg |> 
+  ggplot(aes(x=displ, y=hwy))+
+  geom_jitter(height = 3, width = 3) + 
+  theme(text=element_text(size = 22))
+```
+:::
+:::
+
+## Another example
+
+::: columns
+::: {.column width="50%"}
+```{r, fig.height=7}
+ggplot(penguins, aes(x=year, y=body_mass_g)) +
+  geom_point(size =3)
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height=7}
+ggplot(penguins, aes(x=year, y=body_mass_g)) +
+  geom_point(position="jitter", size = 3)
+```
+:::
+:::
+
+## Other Positions
+
+::: columns
+::: {.column width="50%"}
+Suppose we wanted to show the type of `drive` a car is based on it's `class`
+
+``` r
+ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "stack") 
+```
+
+Default will be `position = stack()`. Doing `geom_bar()` will yield the same thing.
+
+But what if we wanted to compare **proportions**?
+:::
+
+::: {.column width="50%"}
+```{r, fig.height =8, echo = FALSE}
+ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "stack")+ 
+  theme(text=element_text(size = 24))
+```
+:::
+:::
+
+## Position = fill
+
+::: columns
+::: {.column width="50%"}
+``` r
+ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "fill")
+```
+
+Allows us to compare the percentage of 4wheel, front, and rearwheel drive cars that are minivans, compacts, etc.
+
+Does not give us a sense of the sample size.
+:::
+
+::: {.column width="50%"}
+```{r, fig.height =8, echo = FALSE}
+ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "fill")+ 
+  theme(text=element_text(size = 24))
+```
+:::
+:::
+
+## Position = dodge
+
+::: columns
+::: {.column width="50%"}
+``` r
+ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "dodge")
+```
+
+Can use "dodge" here to ensure the bars are separated.
+
+Need to make sure there is a visual separation between groups on the x-axis.
+:::
+
+::: {.column width="50%"}
+```{r, fig.height =8, echo = FALSE}
+ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "dodge")+ 
+  theme(text=element_text(size = 24))
+```
+:::
+:::
+
+## Saving plots as objects
+
+You can save a plot as an object:
+
+```{r}
+bar_plot <- ggplot(mpg, aes(x = drv, fill = class)) + 
+  geom_bar(position = "dodge")+ 
+  theme(text=element_text(size = 24))
+```
+
+If you want to add to this plot, you can then do things like:
+
+``` r
+bar_plot + theme_bw()
+```
+
+This is very helpful if you have to make a similar plot multiple times.
+
+## Coordinates
+
+::: columns
+::: {.column width="50%"}
+```{r, fig.height=7}
+bar_plot + coord_flip()
+```
+:::
+
+::: {.column width="50%"}
+```{r, fig.height=7}
+bar_plot + coord_polar()
+```
+:::
+:::
+
+## Putting it all together
+
+With the tools we have learned, we now have the "mechanical" ability to make virtually any plot that we want.
+
+``` r
+ggplot(data = <DATA>) + 
+  <GEOM_FUNCTION>(
+     mapping = aes(<MAPPINGS>),
+     stat = <STAT>, 
+     position = <POSITION>
+  ) +
+  <COORDINATE_FUNCTION> +
+  <FACET_FUNCTION>
+```
+
+Syntax for ggplot can be very hard to remember, so I recommend lots of practice. You can also use the ggplot [cheatsheet](https://posit.co/resources/cheatsheets/).
+
+# Communication
+
+Chapter 11 Data Science with R
+
+```{r, results = "hide"}
+library(tidyverse)
+library(scales)
+library(ggrepel)
+library(patchwork)
+```
+
+## Making nice plots
+
+Thus far, you have learned how to take your data frame and turn it into a graph that *hopefully* tells you something about the data, and the real world phenomenon that data describes.
+
+. . .
+
+However, it's easy to understand a graph that **you** made, but will other people looking at your graph be able to understand it.
+
+. . .
+
+
+A good rule to live by: **Make your plots as self-explanatory as possible**.
+
+. . .
+
+
+For instance, I should be able to look at the graphs you make in your assignment, and get **at least** the gist of it without **any other context**.
+
+## Labels
+
+::: columns
+::: {.column width="50%"}
+Every graph needs descriptive labels. - Helps explain what the graph is describing - Helps communicate the point of the graph.
+
+``` r
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth(se = FALSE) +
+  labs(
+    x = "Engine displacement (L)",
+    y = "Highway fuel economy (mpg)",
+    color = "Car type",
+    title = "Fuel efficiency generally decreases with engine size",
+    subtitle = "Two seaters (sports cars) are an exception because of their light weight",
+    caption = "Data from fueleconomy.gov"
+  )
+```
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(
+    aes(color = class), 
+    position = "jitter",
+    size = 3) +
+  geom_smooth(se = FALSE, size = 2) +
+  labs(
+    x = "Engine displacement (L)",
+    y = "Highway fuel economy (mpg)",
+    color = "Car type",
+    title = "Fuel efficiency generally decreases with engine size",
+    subtitle = "Two seaters (sports cars) are an exception because of their light weight",
+    caption = "Data from fueleconomy.gov"
+  )+
+  theme(text=element_text(size = 20))
+```
+:::
+:::
+
+## Labels
+
+::: columns
+::: {.column width="50%"}
+If you are using a tool like Rmarkdown or Quarto, you can use figure captions to convey some of this information as well.
+
+\`\`\`{r, fig.cap = "blah"}
+
+Captions tend to be a bit more "formal", e.g useful in scientific papers.
+
+There is a high amount of subjectivity in this. However, I shouldn't have to dig through your report to figure out what you are plotting.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 6, fig.cap = "Figure 1: A comparison of highway fuel economy and engine size in 38 popular models of cars, with the trend estimated using a LOESS curve. Fuel efficiency generally decreases with engine size with the exception of two-seaters due to their light weight"}
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(
+    aes(color = class), 
+    position = "jitter",
+    size = 3) +
+  geom_smooth(se = FALSE, size = 2) +
+  labs(
+    x = "Engine displacement (L)",
+    y = "Highway fuel economy (mpg)",
+    color = "Car type",
+    caption = "Data from fueleconomy.gov"
+  )+
+  theme(text=element_text(size = 20))
+```
+:::
+:::
+
+## Some labelling prescriptions
+
+Yes there is a lot of subjectivity, but you should *almost* always:
+
+-   Make axis labels LARGE ENOUGH TO READ. It looks really clean if the text in your graph roughly matches the text of the rest of the report.
+
+-   If the axis has units, please include them in brackets.
+
+-   Cite source of the data when possible.
+
+## Exercise
+
+::: columns
+::: {.column width="50%"}
+
+Give the following graph appropriate labels. use ?penguins if needed. Make some changes to make the graph more attractive.
+
+```{.r}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                col = species)
+) + 
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  theme(text=element_text(size = 20))
+```
+:::
+
+::: {.column width="50%"}
+```{r, echo =FALSE, fig.height = 8}
+ggplot(
+  data = penguins,
+  mapping = aes(x=flipper_length_mm,  
+                y = body_mass_g,
+                col = species)
+) + 
+  geom_point()+
+  geom_smooth(se = FALSE)+
+  theme(text=element_text(size = 20))
+```
+:::
+:::
+
+## Annotations
+
+::: columns
+::: {.column width="50%"}
+Labels on axes etc. are absolutely necessary.
+
+An optional, but potentially very helpful tool is labeling observations or aspects of the graph directly.
+
+For instance, instead of having a legend on this graph, we could instead opt to label the curves directly.
+:::
+
+::: {.column width="50%"}
+```{r, echo = FALSE, fig.height = 8}
+drive_plot <- ggplot(mpg, aes(x = displ, y = hwy, color = drv)) +
+  geom_point(size = 3) +
+  geom_smooth(se = FALSE, size =2)+
+  theme(text=element_text(size = 20))
+drive_plot
+```
+:::
+:::
+
+## Annotating
+
+Where should we put the label? 1 option would be to put it at the end of each curve.
+
+Let's first extract the position of the end of the curve. Take the largest `displ` value for each drive type.
+
+```{r}
+label_info <- mpg |>
+  group_by(drv) |>
+  arrange(desc(displ)) |>
+  slice_head(n = 1) 
+
+label_info
+```
+
+## Annotating (contd)
+
+Next, make a dataset with the x (`displ`), y (`hwy`) coordinates, the drv variable to match the original data, and the label we want (call it `drive_type`)
+
+```{r}
+label_info <- label_info |>   
+  mutate(
+    drive_type = case_when(
+      drv == "f" ~ "front-wheel",
+      drv == "r" ~ "rear-wheel",
+      drv == "4" ~ "4-wheel"
+    )
+  ) |>
+  select(displ, hwy, drv, drive_type)
+
+label_info
+```
+
+## 
+
+::: columns
+::: {.column width="50%"}
+`geom_text()` function maps our information to locations on the graph.
+
+`label` aesthetic is mapped to `drive_type`. Graph's labels will be equal to the value that is present in the `drive_type` variable.
+
+``` {.r code-line-numbers="|2|3|4|5|7"}
+drive_plot +
+  geom_text(
+    data = label_info, 
+    aes(x = displ, y = hwy, label = drive_type),
+    size = 10, vjust = -0.5, hjust = "right"
+  ) +
+  theme(legend.position = "none")
+```
+:::
+
+::: {.column width="50%"}
+`hjust` and `vjust` move the label around the associated x/y values so that the line doesn't pass through the label.
+
+```{r, echo = FALSE, fig.height = 7}
+drive_plot +
+  geom_text(
+    data = label_info, 
+    aes(x = displ, y = hwy, label = drive_type),
+    size = 10, vjust = -0.5, hjust = "right"
+  ) +
+  theme(legend.position = "none")
+```
+:::
+:::
