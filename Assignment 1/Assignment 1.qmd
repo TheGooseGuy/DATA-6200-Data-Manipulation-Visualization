@@ -1,0 +1,84 @@
+---
+title: "DATA*6200 Assignment 1"
+author: "Dr. Justin Slater"
+format: html
+---
+
+# Introduction
+
+This assignment is meant to reinforce and assess the following skills:
+
+- Basic and intermediate data wrangling skills in R, including
+    - Mutating, filtering, summarizing
+    - Dealing with a variety of variable types
+    - Applications of regular expressions
+- Data cleaning
+- Data visualization in `ggplot`
+- Critical thinking skills
+
+# Your task
+
+Since the beginning of the Covid-19 pandemic, the workforce has undergone rapid changes, with some industries being more affected than others. In this assignment, you will analyze salaries by industry/jobs, and investigate trends in these industries/jobs over time. You will be using the `ask_a_manager.xlsx` data set provided on Courselink (from [here](https://www.askamanager.org/)). This data set was created using a form with several columns being "free text", and are hence messy. Feel free to do some research on these data.
+
+Throughout your analysis of these data, you should aim to answer the following questions:
+
+1. Which industry or industries have the highest/lowest salaries? 
+2. Which industries have the highest salary variability?
+3. How do salaries vary over time and geography?
+
+You should also offer insights as to why you observe what you observe, mentioning limitations with the data when relevant.
+
+# Instructions
+
+Your assignment should consist of two sections. The first section should be used to document important data cleaning steps and their justifications. This should be a combination of:
+
+- Annotated code that is clear, concise, and demonstrates techniques we learned in class.
+- Written justification of why certain data-related decisions were made, when applicable.
+
+The second section should have **up to five** data visualizations, alongside written descriptions of each. Describe how your visualizations help you answer the above questions, but also discuss their limitations. Format this section like a short essay, using your visualizations to reinforce your arguments.
+
+## Submission
+
+You should complete your assignment using Quarto or Rmarkdown. You should submit a code file and html/pdf with your report. The TA should be able to reproduce your report with minimal effort.
+
+## Tips
+
+- There are a myriad of ways you could approach this assignment, just because your friend is doing it one way, doesn't mean you should. Me and my TA respect originality.
+- Be concise and specific. Concise code and descriptions are your best friend. Please do not submit ChatGPT "valuable insights" paragraphs that could apply to any analysis. When discussing data limitations, try to offer specific limitations about **these data**, not limitations that could be said about any data. E.g rather than say "there are missing values", you may discuss **how** missingness impacts your ability to answer one of the questions, and what the impact may be.
+- Use methods shown in class wherever possible. 
+- Take pride in your final report's format. In consulting, there is a saying: "If it looks right, it is right". Although I don't really believe this, a well formatted report builds trust in the reader.
+- Use descriptive figure captions.
+
+# Grading Scheme [45 marks total]
+
+The following rubric depicts the grade breakdown for this assignment, followed by statements that are consistent with certain grade levels. Please note that a more detailed rubric will be used for grading. However, we do not provide you with a more detailed rubric at this stage, because this would give too many clues on how the assignment should be done.
+
+### Code quality [10 points]
+
+*Note: It is your job to know what good coding practices are based on the lectures/readings.*
+
+- [9-10] Code is clear and concise, and lacks unnecessary repetition. Code clearly demonstrates the techniques learned in class, and follows good programming practices. The code is well documented and easy to follow. 
+- [7-8] Code is mostly clear and concise, but tends to over-rely on one or two techniques. The code is mostly well documented, but some comments are missing. "Over-commenting" may be present.
+- [5-6] Code "gets the job done" but is very hard to follow or includes unnecessary chunks. Methods from outside the class are implemented with no explanation or description.
+- [<5] inadequate
+
+### Data Processing Decisions [10 marks]
+
+- [9-10] Data cleaning and processing decisions are well-justified in context of research question(s). The student made extra effort to get the most out of the data at hand. Data is formatted according to principles discussed in class.
+- [7-8] Most data cleaning/processing decisions are justified, with some processing decisions potentially being misguided. Data is formatted according to principles discussed in class, with 1 or 2 noticeable inaccuracies.
+- [5-6] Data cleaning/processing decisions are not well justified. Many observations are binned or discarded without much thought. Data is not well formatted after processing.
+- [<5] Inadequate
+
+## Data visualizations and descriptions [20 marks]
+
+- [18-20] Visualizations are attractive, well captioned and mostly convey their point on their own. Good graphing principles are followed in all visualizations, applying advanced ggplot features when necessary. Arguments and descriptions accompanying each figure are clear and concise, are specific to the problem at hand, and help convey the student's point. Figure captions are well utilized.
+- [14-17] Visualizations are mostly attractive, with minor unclear elements. Good graphing principles are mostly followed in some visualizations, but not in others. Arguments and descriptions accompanying the figures are mostly clear and concise, but may be more vague than necessary. Figure Captions are utilized, but may not tell the whole story.
+- [10-13] Visualizations lack clarity in key areas, and are hard to interpret without additional explanation. Arguments and descriptions accompanying the visualizations are vague or are irrelevant to answering the research questions(s). Captions are not used or are misapplied.
+- [<10] inadequate
+
+## Formatting and Reproducibility [5 marks]
+
+- [5] The analysis was reproducible with minimal effort. Results from the reproduced file match those from the submitted file. The document is easy to follow and is professionally presented.
+- [3-4] The analysis required substantial effort to reproduce. There are minor discrepancies between the submitted file and reproduced file. The document is mostly well-presented.
+- [0-2] Analysis was not reproducible or required consultation with the student to reproduce it. The document is not easy to follow and is not visually attractive.
+
