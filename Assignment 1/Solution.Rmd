@@ -9,117 +9,127 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Section 1 Data Cleaning
+# Section 1
 
-```{r}
-# Packagess
+```{r load packages}
 library(tidyverse)
 library(readxl)
 library(Dict)
 library(stringr)
 library(ggplot2)
 library(dplyr)
-
+library(zoo)
+library(maps)
 ```
 
-```{r}
+```{r read data from excel}
 # Read the survey response
 data <- read_xlsx("/Users/marlowe/Desktop/DATA*6200 Assignment 1/data/ask_a_manager.xlsx")
 ```
 
-```{r}
+## Data Cleaning
+
+```{r rename columns}
 # Rename columns for easier reference.
 
 ## yoe refers to "Years of Experience"
 ## salary refers to "Annual Salary"
 colnames(data) <- c("time","age","industry","title","title_additinonal_context","salary","bonus","currency","other_currency","income_additional_context","country","us_state","city","overall_yoe","current_field_yoe","highest_edu","gender","race")
-
-colomn_names <- colnames(data)
 ```
 
-## Industry with Highest/Lowest Salary
+To answer the three questions, multiple columns are required to be cleaned, such as "industry", "salary", "bonus", "currency", "other_currency"... \### Industry
 
-**Industry**\
-To check which industry has the highest/lowest salary, 5 columns are required, which are "industry", "salary", "bonus", "currency", "other_currency".
-
-```{r}
+```{r unique industry}
 # Check the unique value of the column "industry"
-data %>% 
-  select(industry) %>% 
+data |> 
+  select(industry) |> 
   unique()
 ```
 
-The result shows 1132 different results of industry description, but many of them are similar or even the same to each other. A good way to categorize them is through North American Industry Classification System (NAICS)
+The result shows 1132 different results of industry description, but many of them are similar or even the same to each other. A good way to categorize them is through [North American Industry Classification System (NAICS)](https://www.census.gov/naics/?58967?yearbck=2022)
 
-```{r}
-naics <- dict("11" = "Agriculture, Forestry, Fishing and Hunting", "21" = "Mining, Quarrying, and Oil and Gas Extraction", "22" = "Utilities", "23" = "Construction", "31-33" = "Manufacturing", "42" = "Wholesale Trade", "44-45" = "Retail Trade", "48-49" = "Transportation and Warehousing", "51" = "Information", "52" = "Finance and Insurance", "53" = "Real Estate and Rental and Leasing", "54" = "Professional, Scientific, and Technical Services", "55" = "Management of Companies and Enterprises", "56" = "Administrative and Support and Waste Management and Remediation Services", "61" = "Educational Services", "62" = "Health Care and Social Assistance", "71" = "Arts, Entertainment, and Recreation", "72" = "Accommodation and Food Services", "81" = "Other Services (except Public Administration)", "92" = "Public Administration")
+```{r NAICS}
+naics <- dict("11" = "Natural", "21" = "Energy", "22" = "Utilities", "23" = "Construction", "31-33" = "Manufacturing", "42" = "Wholesale", "44-45" = "Retail", "48-49" = "Transportation", "51" = "IT", "52" = "Finance", "53" = "Estate", "54" = "Scientific", "55" = "Enterprise", "56" = "Administrative", "61" = "Education", "62" = "Medical", "71" = "Art", "72" = "Service", "81" = "Other", "92" = "Public")
+
+# According to NAICS, "11" = "Agriculture, Forestry, Fishing and Hunting", "21" = "Mining, Quarrying, and Oil and Gas Extraction", "22" = "Utilities", "23" = "Construction", "31-33" = "Manufacturing", "42" = "Wholesale Trade", "44-45" = "Retail Trade", "48-49" = "Transportation and Warehousing", "51" = "Information", "52" = "Finance and Insurance", "53" = "Real Estate and Rental and Leasing", "54" = "Professional, Scientific, and Technical Services", "55" = "Management of Companies and Enterprises", "56" = "Administrative and Support and Waste Management and Remediation Services", "61" = "Educational Services", "62" = "Health Care and Social Assistance", "71" = "Arts, Entertainment, and Recreation", "72" = "Accommodation and Food Services", "81" = "Other Services (except Public Administration)", "92" = "Public Administration"
 ```
 
-```{r}
-data <- data %>%   #Create a new column "industry_lowercase"
+```{r covert to lowercase}
+data <- data |>   # Convert strings in "industry" to lowercase for easier categorization.
   mutate(industry_lowercase = tolower(industry))
 
-data <- data %>%   #Create a new column "title_additional_context_lowercase"
-  mutate(title_additinonal_context_lowercase = tolower(title_additinonal_context))
-
-head(data)
+data <- data |>   # Convert strings in 
+  mutate(title_lowercase = tolower(title))
 ```
 
-```{r}
-data <- mutate(data, industry_code = case_when(
-  # Categorize the "industry_lowercase" column
-  str_detect(industry_lowercase, "^agricul|^forest|^fish|^hunt") ~ "[11]",
-  str_detect(title_additinonal_context_lowercase, "^agricul|^forest|^fish|hunt") ~ "[11]",
-  str_detect(industry_lowercase, "^mining|^quarry|^oil|^gas") ~ "[21]",
-  str_detect(title_additinonal_context_lowercase, "^mining|^quarry|^oil|^gas") ~ "[21]",
-  str_detect(industry_lowercase, "^utilities|^energy") ~ "[22]",
-  str_detect(title_additinonal_context_lowercase, "^utilities|^energy") ~ "[22]",
-  str_detect(industry_lowercase, "^construct|^architect") ~ "[23]",
-  str_detect(title_additinonal_context_lowercase, "^construct|^architect") ~ "[23]",
-  str_detect(industry_lowercase, "^manufactur") ~ "[31]",# For later visualization, we use the first number to represnet the whole interval, here we use [31] to represent [31-33]
-  str_detect(title_additinonal_context_lowercase, "^manufactur") ~ "[31]",
-  str_detect(industry_lowercase, "^wholesale") ~ "[42]",
-  str_detect(title_additinonal_context_lowercase, "^wholesale") ~ "[42]",
-  str_detect(industry_lowercase, "^retail|trade") ~ "[44]", 
-  str_detect(title_additinonal_context_lowercase, "^retail|^trade") ~ "[44]",
-  str_detect(industry_lowercase, "^transport|^warehouse") ~ "[48]",
-  str_detect(title_additinonal_context_lowercase, "^transport|^warehouse") ~ "[48]",
-  str_detect(industry_lowercase, "^estate|^rent|leas") ~ "[53]",
-  str_detect(title_additinonal_context_lowercase, "^estate|^rent|leas") ~ "[53]",
-  str_detect(industry_lowercase, "^professional|^scientific|^technical|^biotechnology|^aerospace|^research|^environmental") ~ "[54]",
-  str_detect(title_additinonal_context_lowercase, "^professional|^scientific|^technical|^biotechnology|^aerospace|^research|^environmental") ~ "[54]",
-  str_detect(industry_lowercase, "^company|^enterprise|^recruit|hr|^director") ~ "[55]",
-  str_detect(title_additinonal_context_lowercase, "^company|^enterprise|^recruit|hr|^manage|^director") ~ "[55]",
-  str_detect(industry_lowercase, "^administrative|support") ~ "[56]",
-  str_detect(title_additinonal_context_lowercase, "^administrative|support") ~ "[56]",
-  str_detect(industry_lowercase, "^edu|^academic|^phd|^university") ~ "[61]",
-  str_detect(title_additinonal_context_lowercase, "^edu|^academic|^phd|^university|^school") ~ "[61]",
-  str_detect(industry_lowercase, "^health|^care") ~ "[62]",
-  str_detect(title_additinonal_context_lowercase, "^health|^care") ~ "[62]",
-  str_detect(industry_lowercase, "^art|^entertainment|^recreation") ~ "[71]",
-  str_detect(title_additinonal_context_lowercase, "^art|^entertainment|^recreation|^writ") ~ "[71]",
-  str_detect(industry_lowercase, "^accomodation|^food|^hopitality|^event|^biopharma|^medical|^pharma") ~ "[72]",
-  str_detect(title_additinonal_context_lowercase, "^accomodation|^food|^hopitality|^event|^biopharma|^medical|^pharma") ~ "[72]",
-  str_detect(industry_lowercase, "^public|law|^social|^survey|^librar|^politic") ~ "[92]",
-  str_detect(title_additinonal_context_lowercase, "^public|^law|^social|^survey|^librar|^politic") ~ "[92]",
-  str_detect(industry_lowercase, "^nonprofit") ~ "[81]",
-  str_detect(title_additinonal_context_lowercase, "^nonprofit") ~ "[81]",
-  str_detect(industry_lowercase, "^infomation|^tech|^computing|^media|^digital|^data|^publish") ~ "[51]",
-  str_detect(title_additinonal_context_lowercase, "^infomation|^tech|^computing|^media|^digital|^data|^publish") ~ "[51]",
-  str_detect(industry_lowercase, "^finance|^insurance|^business|^consult|^market|^sales|") ~ "[52]",
-  str_detect(title_additinonal_context_lowercase, "^finance|^insurance|^business|^consult|^market|^sales|") ~ "[52]",
-  TRUE ~ "[81]"))      # If none of the above suits the case, then it's categorized into "others"
-
-data %>% 
-  select(industry_lowercase, title_additinonal_context_lowercase, industry_code) %>% 
-  head()
+```{r categorize industries}
+# Categorize the "industry_lowercase" column and the "title_additional_context_lowercase" column into "industry_code"
+data <- mutate(data, industry_category = case_when(
+  str_detect(industry_lowercase, "^agricul|^forest|^fish|^hunt") ~ " Natural",
+  str_detect(title_lowercase, "^agricul|^forest|^fish|hunt") ~ "Natural",
+  
+  str_detect(industry_lowercase, "^mining|^quarry|^oil|^gas") ~ "Energy",
+  str_detect(title_lowercase, "^mining|^quarry|^oil|^gas") ~ "Energy",
+  
+  str_detect(industry_lowercase, "^utilities|^energy") ~ "Utilities",
+  str_detect(title_lowercase, "^utilities|^energy") ~ "Utilities",
+  
+  str_detect(industry_lowercase, "^construct|^architect") ~ "Construction",
+  str_detect(title_lowercase, "^construct|^architect") ~ "Construction",
+  
+  str_detect(industry_lowercase, "^manufactur") ~ "Manufacturing",
+  str_detect(title_lowercase, "^manufactur") ~ "Manufacturing",
+  
+  str_detect(industry_lowercase, "^wholesale|^trade") ~ "Wholesale",
+  str_detect(title_lowercase, "^wholesale|^trade") ~ "Wholesale",
+  
+  str_detect(industry_lowercase, "^retail") ~ "Retail", 
+  str_detect(title_lowercase, "^retail") ~ "Retail",
+  
+  str_detect(industry_lowercase, "^transport|^warehouse") ~ "Transportation",
+  str_detect(title_lowercase, "^transport|^warehouse") ~ "Transportation",
+  
+  str_detect(industry_lowercase, "^infomation|^tech|^comput|^media|^digital|^data") ~ "IT",
+  str_detect(title_lowercase, "^infomation|^tech|^comput|^media|^digital|^data") ~ "IT",
+  
+  str_detect(industry_lowercase, "^finance|^insuran|^business|^consult|^market|^sales|^account") ~ "Finance",
+  str_detect(title_lowercase, "^finance|^insuran|^business|^consult|^market|^sales|^account") ~ "Finance",
+  
+  str_detect(industry_lowercase, "^estate|^rent|leas|^property") ~ "Estate",
+  str_detect(title_lowercase, "^estate|^rent|leas|^property") ~ "Estate",
+  
+  str_detect(industry_lowercase, "^professional|^scientific|^technical|^biotech|^aerospace|^research|^environment|^engin") ~ "Scientific",
+  str_detect(title_lowercase, "^professional|^scientific|^technical|^biotech|^aerospace|^research|^environment|^engin") ~ "Scientific",
+  
+  str_detect(industry_lowercase, "^company|^enterprise|^recruit|^hr|^manage|^office") ~ "Enterprise",
+  str_detect(title_lowercase, "^company|^enterprise|^recruit|^hr|^manage|^office") ~ "Enterprise",
+  
+  str_detect(industry_lowercase, "^administra|support") ~ "Administrative",
+  str_detect(title_lowercase, "^administra|support") ~ "Administrative",
+  
+  str_detect(industry_lowercase, "^edu|^academi|^phd|^university") ~ "Education",
+  str_detect(title_lowercase, "^edu|^academi|^phd|^university|^school") ~ "Education",
+  
+  str_detect(industry_lowercase, "^health|^care|^biopharma|^medical|^pharma") ~ "Medical",
+  str_detect(title_lowercase, "^health|^care|^biopharma|^medical|^pharma") ~ "Medical",
+  
+  str_detect(industry_lowercase, "^art|^entertainment|^recreation|^writ|^publish|^direct") ~ "Art",
+  str_detect(title_lowercase, "^art|^entertainment|^recreation|^writ|^publish|^direct") ~ "Art",
+  
+  str_detect(industry_lowercase, "^accomodation|^food|^hopital") ~ "Service",
+  str_detect(title_lowercase, "^accomodation|^food|^hopital") ~ "Service",
+  
+  str_detect(industry_lowercase, "^public|law|^social|^survey|^librar|^politic|^event|^govern") ~ "Public",
+  str_detect(title_lowercase, "^public|^law|^social|^survey|^librar|^politic|^event|^govern") ~ "Public",
+  
+  TRUE ~ "Other")) #If none of the above suits the case, then it's categorized into "Other"
 ```
 
-**Salary**
+### Salary
 
-```{r}
-data$salary[is.na(data$salary)] <- 0
-data$bonus[is.na(data$bonus)] <- 0      # remove all the NA's
+```{r compute total salary}
+data$salary[is.na(data$salary)] <- 0    # remove all the NA's
+data$bonus[is.na(data$bonus)] <- 0
 
 data <- data %>%  
   mutate(total = as.numeric(salary) + as.numeric(bonus))  # Calculate the total salary
@@ -127,123 +137,255 @@ data <- data %>%
 
 Convert the currency to US Dollars.
 
-```{r}
-data %>% 
-  select(currency) %>% 
-  unique()      # There are 11 differennt kinds of currency, with an "Other"
+```{r unique currency}
+data |> 
+  select(currency) |> 
+  unique()      # There are 11 different kinds of currency, with an "Other"
 
 number_of_interviewees <- count(data)
-data %>% 
-  filter(currency == "Other") %>% 
+data |> 
+  filter(currency == "Other") |> 
   summarize(count = n(), proportion = n()/as.numeric(number_of_interviewees))
 ```
 
-Interviewees with "Other" kind of currency is less than 0.5% of the total results, so we generally don't think it has a huge affect on the analysis result. These terms will not be included in future analysis.
+Interviewees with "Other" kind of currency accout for approximately 0.6% of the data set, which is not supposed to have a huge affect on the analysis result.
 
-```{r}
-data <- mutate(data, total_salary_in_usd = case_when(
-  str_detect(currency, "USD") ~ salary * 1.00,
-  str_detect(currency, "GBP") ~ salary * 1.33,
-  str_detect(currency, "CAD") ~ salary * 0.74,
-  str_detect(currency, "EUR") ~ salary * 1.11,
-  str_detect(currency, "AUD") ~ salary * 0.69,
-  str_detect(currency, "NZD") ~ salary * 0.63,
-  str_detect(currency, "CHF") ~ salary * 1.18,
-  str_detect(currency, "ZAR") ~ salary * 0.057,
-  str_detect(currency, "SEK") ~ salary * 0.097,
-  str_detect(currency, "HKD") ~ salary * 0.13,
-  str_detect(currency, "JPY") ~ salary * 0.007,
-  TRUE ~ NA_real_ # "Other" will not be included for future analysis, so assign them to number 0 won't affect the final result.
-))
+```{r convert salary to USD}
+data <- mutate(data, total_salary_usd = case_when(
+  str_detect(currency, "USD") ~ total * 1.00,
+  str_detect(currency, "GBP") ~ total * 1.33,
+  str_detect(currency, "CAD") ~ total * 0.74,
+  str_detect(currency, "EUR") ~ total * 1.11,
+  str_detect(currency, "AUD") ~ total * 0.69,
+  str_detect(currency, "NZD") ~ total * 0.63,
+  str_detect(currency, "CHF") ~ total * 1.18,
+  str_detect(currency, "ZAR") ~ total * 0.057,
+  str_detect(currency, "SEK") ~ total * 0.097,
+  str_detect(currency, "HKD") ~ total * 0.13,
+  str_detect(currency, "JPY") ~ total * 0.007,
+  TRUE ~ NA_real_)) # "Other" will not be included for future analysis.
 ```
 
-```{r}
-data %>% 
-  select(industry_code, total_salary_in_usd,currency) %>% 
-  group_by(industry_code) %>% 
+### Time
+
+```{r year&month}
+data <- data |> 
+    mutate(year = str_sub(time, 1, 4)) |> 
+    mutate(month = str_sub(time, 6, 7)) |> 
+    mutate(year_month = str_sub(time, 1, 7))
+```
+
+### Geography
+```{r filter the data to USA}
+data_us <- data |> 
+    filter(is.na(us_state) != TRUE)
+```
+
+```{r sort states}
+data_us <- data_us |> 
+    mutate(states = case_when(
+        str_detect(us_state, "^Alabama") ~ "Alabama",
+        str_detect(us_state, "^Alaska") ~ "Alaska",
+        str_detect(us_state, "^Arizona") ~ "Arizona",
+        str_detect(us_state, "^Arkansas") ~ "Arkansas",
+        str_detect(us_state, "^California") ~ "California",
+        str_detect(us_state, "^Colorado") ~ "Colorado",
+        str_detect(us_state, "^Connecticut") ~ "Connecticut",
+        str_detect(us_state, "^Delaware") ~ "Delaware",
+        str_detect(us_state, "^Florida") ~ "Florida",
+        str_detect(us_state, "^Georgia") ~ "Georgia",
+        str_detect(us_state, "^Hawaii") ~ "Hawaii",
+        str_detect(us_state, "^Idaho") ~ "Idaho",
+        str_detect(us_state, "^Illinois") ~ "Illinois",
+        str_detect(us_state, "^Indiana") ~ "Indiana",
+        str_detect(us_state, "^Iowa") ~ "Iowa",
+        str_detect(us_state, "^Kansas") ~ "Kansas",
+        str_detect(us_state, "^Kentucky") ~ "Kentucky",
+        str_detect(us_state, "^Louisiana") ~ "Louisiana",
+        str_detect(us_state, "^Maine") ~ "Maine",
+        str_detect(us_state, "^Maryland") ~ "Maryland",
+        str_detect(us_state, "^Massachusetts") ~ "Massachusetts",
+        str_detect(us_state, "^Michigan") ~ "Michigan",
+        str_detect(us_state, "^Minnesota") ~ "Minnesota",
+        str_detect(us_state, "^Mississippi") ~ "Mississippi",
+        str_detect(us_state, "^Missouri") ~ "Missouri",
+        str_detect(us_state, "^Montana") ~ "Montana",
+        str_detect(us_state, "^Nebraska") ~ "Nebraska",
+        str_detect(us_state, "^Nevada") ~ "Nevada",
+        str_detect(us_state, "^New Hampshire") ~ "New Hampshire",
+        str_detect(us_state, "^New Jersey") ~ "New Jersey",
+        str_detect(us_state, "^New Mexico") ~ "New Mexico",
+        str_detect(us_state, "^New York") ~ "New York",
+        str_detect(us_state, "^North Carolina") ~ "North Carolina",
+        str_detect(us_state, "^North Dakota") ~ "North Dakota",
+        str_detect(us_state, "^Ohio") ~ "Ohio",
+        str_detect(us_state, "^Oklahoma") ~ "Oklahoma",
+        str_detect(us_state, "^Oregon") ~ "Oregon",
+        str_detect(us_state, "^Pennsylvania") ~ "Pennsylvania",
+        str_detect(us_state, "^Rhode Island") ~ "Rhode Island",
+        str_detect(us_state, "^South Carolina") ~ "South Carolina",
+        str_detect(us_state, "^South Dakota") ~ "South Dakota",
+        str_detect(us_state, "^Tennessee") ~ "Tennessee",
+        str_detect(us_state, "^Texas") ~ "Texas",
+        str_detect(us_state, "^Utah") ~ "Utah",
+        str_detect(us_state, "^Vermont") ~ "Vermont",
+        str_detect(us_state, "^Virginia") ~ "Virginia",
+        str_detect(us_state, "^Washington") ~ "Washington",
+        str_detect(us_state, "^West Virginia|^District") ~ "West Virginia",
+        str_detect(us_state, "^Wisconsin") ~ "Wisconsin",
+        str_detect(us_state, "^Wyoming") ~ "Wyoming",
+        TRUE ~ "Other"))
+```
+## Industry with Highest/Lowest Salary
+
+```{r remove top and bottom 2.5% of the data}
+filtered_data <- data |>  # filtered_data means data with top2.5% and bottom 2.5% removed.
   filter(currency != "Other" 
-         & total_salary_in_usd > 20000 
-         & total_salary_in_usd < 100000000) %>%  # In order to get a more reasonable result, we generally consider data points with salary no less than the possible lowest salary in USD, and also not higher than the practical highest salary in USD.
-  summarise(
-    mean_salary = mean(total_salary_in_usd, na.rm = TRUE),
-    lowest = min(total_salary_in_usd, na.rm = TRUE),
-    highest = max(total_salary_in_usd, na.rm = TRUE),
-    ) %>% 
-  arrange(desc(mean_salary))
+         & total_salary_usd >= quantile(data$total_salary_usd, 0.025, na.rm = TRUE) 
+         & total_salary_usd <= quantile(data$total_salary_usd, 0.975, na.rm = TRUE))
 ```
 
-The analysis shows that among all the job categories of NAICS, industry "**51**", which are jobs related to **IT,Computing** and **Technology**, has the **highest average annual salary** of about 117k USD.
+```{r}
+salary_summary <- filtered_data |> 
+  select(industry_category, total_salary_usd) |> 
+  group_by(industry_category) |> 
+  summarise(mean_salary = mean(total_salary_usd)) |> 
+  arrange(desc(mean_salary))
 
-On the other side, industry "**44**", which are jobs related to **retail** and **trade**, has the **lowest average annual salary** of about 62k USD.
+salary_summary |> 
+    slice_max(mean_salary, n = 1) |>  
+    bind_rows( # Combine the two sliced result into one dataframe.
+        salary_summary |> 
+            slice_min(mean_salary, n = 1))
+```
 
-# Section 2 Data Visualizations & Explanation
+The analysis shows that among all the job categories of NAICS, jobs related to **IT**,**Computing** and **Technology** have the **highest** average annual salary of about *112k* USD.\
+On the other hand, jobs related to **administrative**, **support**, **waste management**, and **remediation Services**, has the **lowest** average annual salary of less than *54k* USD.
+
+# Section 2 Data Visualization
 
 ## Industry with High Variability
+
 ```{r}
-data %>% 
-  select(industry_code, total_salary_in_usd,currency) %>% 
-  group_by(industry_code) %>% 
-  filter(currency != "Other"
-         & total_salary_in_usd > 20000 
-         & total_salary_in_usd < 100000000) %>%  
+summary_filtered_data <- filtered_data  |>  
+  select(industry_category, total_salary_usd) |> 
+  group_by(industry_category) |> 
   summarise(
-    mean_salary = mean(total_salary_in_usd, na.rm = TRUE),  # mean, average
-    sd_salary = sd(total_salary_in_usd, na.rm = TRUE),      # standard deviation
-    cv_salary = sd_salary / mean_salary,                    # coefficient of variation
-    iqr_salary = IQR(total_salary_in_usd, na.rm = TRUE),    # interquartile range
-    range_of_salary = max(total_salary_in_usd, na.rm = TRUE) - min(total_salary_in_usd, na.rm = TRUE)) %>% 
-  arrange(desc(sd_salary))
+    mean_salary = mean(total_salary_usd), # mean
+    sd_salary = sd(total_salary_usd),     # standard deviation
+    cv_salary = sd_salary / mean_salary,  # coefficient of variation
+    iqr_salary = IQR(total_salary_usd),   # interquartile range
+    range_salary = max(total_salary_usd) - min(total_salary_usd))
 ```
-```{r}
-data %>% 
-  select(industry_code, total_salary_in_usd,currency) %>% 
-  group_by(industry_code) %>% 
-  filter(currency != "Other"
-         & total_salary_in_usd > 20000 
-         & total_salary_in_usd < 100000000) %>%  
-  summarise(
-    mean_salary = mean(total_salary_in_usd, na.rm = TRUE),  # mean, average
-    sd_salary = sd(total_salary_in_usd, na.rm = TRUE),      # standard deviation
-    cv_salary = sd_salary / mean_salary,                    # coefficient of variation
-    iqr_salary = IQR(total_salary_in_usd, na.rm = TRUE),    # interquartile range
-    range_of_salary = max(total_salary_in_usd, na.rm = TRUE) - min(total_salary_in_usd, na.rm = TRUE)) %>% 
-  arrange(desc(mean_salary)) %>% 
-  ggplot(
-    aes(x = industry_code, y = mean_salary))+
-    geom_bar(stat = "identity", fill = "steelblue") +
-    labs(title = "Average Salary by Industry", x = "Industry Code", y = "Average Salary (USD)") +
-    theme(text=element_text(size = 12))
+
+```{r variability}
+summary_filtered_data |> 
+    pivot_longer(cols = c(sd_salary, iqr_salary),
+                 names_to = "statistic",
+                 values_to = "value") |> 
+    ggplot(aes(x = reorder(industry_category, -value),y = value)) +
+    geom_bar(stat = "identity", fill = "slategrey") +
+    facet_wrap(~statistic, scales = "free_y") +
+    labs(title = "Industry Statistics: Interquartile Range, Standard Deviation", 
+         x = "Industry",
+         y = "Value") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),   # Rotate x-axis labels
+          text = element_text(size = 10))
 ```
+
+The result shows that among all the 20 industries, **IT**, **Wholesale**, **Medical**, **Utilities**, and **Finance** have the highest variability. These industries has the largest interquartile value and standard deviation, which indicates that salary of people working in these industries spreads over a wide range. \## Salaries Vary Over Time
+
+##Salaries Vary Over Time and Geography
+### Vary Over Time
 ```{r}
-data %>% 
-  select(industry_code, total_salary_in_usd,currency) %>% 
-  filter(currency != "Other"
-         & total_salary_in_usd > 20000 
-         & total_salary_in_usd < 100000000) %>%  
-  ggplot(aes(x =  industry_code, y = total_salary_in_usd, color = industry_code))+
+salary_over_time <- filtered_data |> 
+    select(year, month, year_month, total_salary_usd) |> 
+    group_by(year, month, year_month) |> 
+    summarize(average_salary = mean(total_salary_usd, na.rm = TRUE), .groups = "drop")
+```
+
+```{r}
+salary_over_time |> 
+    ggplot(mapping = aes(x = as.yearmon(year_month), 
+                         y = average_salary)) +
+    geom_point(color = "black") + 
+    geom_line(color = "slategrey") +  
+    geom_smooth(method = "loess", se = FALSE, color = "lightblue")+
+    labs(title = "Average Salary Trend from April 2021 to September 2024",
+         x = "Date",
+         y = "Average Salary (USD)")
+    theme(axis.text.x = element_text(angle = 30, hjust = 1),   # Rotate x-axis labels
+          text = element_text(size = 1))
+```
+
+-   [ ] **The month is not shown correctly**
+Shown by the graph, from the fitted approximation line, the average monthly salary remains stable between April 2021 and September 2024 except a decrease at early 2023, which was possibly caused by the pandemic. But after a few months, the average monthly salary went back to the normal level. However, it is also very obvious that the average monthly salary among all industries also becames more and more unstable as the time goes, which is shown by the fluctuation.
+
+### Vary Over Geography
+```{r salary by state}
+data_us_filtered <- data_us |>
+  filter(currency != "Other" 
+         & total_salary_usd >= quantile(data$total_salary_usd, 0.025, na.rm = TRUE) 
+         & total_salary_usd <= quantile(data$total_salary_usd, 0.975, na.rm = TRUE))
+
+us_summary <- data_us_filtered |> 
+    select(industry_category, states, total_salary_usd) |> 
+    filter(is.na(data_us_filtered$states) != TRUE) |> 
+    group_by(states) |> 
+    summarise(mean_salary = mean(total_salary_usd, na.rm = TRUE)) |> 
+    arrange(desc(mean_salary))
+```
+
+
+```{r}
+us_map <- map_data("state")
+
+us_summary$states <- tolower(us_summary$states) # Convert to lowercase to match the map library
+
+us_map_summary <- us_map |> 
+  left_join(us_summary, by = c("region" = "states"))
+
+us_map_summary |> 
+    ggplot(aes(x = long, y = lat,
+           group = group,
+           fill = mean_salary)) +
+    geom_polygon(color = "white") +  # Add state borders
+    coord_fixed(1.4) +  # Fix aspect ratio
+    labs(title = "Average Salary by State", fill = "Average Salary (USD)") +
+    theme_minimal() +  # Remove background and gridlines
+    scale_fill_gradient(low = "snow", high = "steelblue4")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+boxplot
+
+```{r}
+data |> 
+  select(industry_category, total_salary_usd,currency) |> 
+  filter(currency != "Other") |>  
+  ggplot(aes(x =  industry_category, y = total_salary_usd))+
     geom_boxplot() +
     labs(title = "Salary Distribution by Industry", x = "Industry Code", y = "Salary (USD)") +  
     theme(text=element_text(size = 12))
-
-```
-```{r}
-head(data)
-```
-Here we sort the result by the standard deviation of the salary, result from last section shows that while industry "**52**" - **business&finance** has a relatively high average annual salary among all the categories, it also has the highest variability, which means the values of salary spread widely than any other industry. This conclusion is also proved by the relatively high coefficient of variation and large range of interquartile range.
-## Salaries Vary Over Time and Geography
-
-
-
-
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
 ## Including Plots
