@@ -1,6 +1,5 @@
 ---
 title: "DATA*6200_Assignment1"
-author: "Zikang"
 date: "2024-10-01"
 output:
   html_document: default
