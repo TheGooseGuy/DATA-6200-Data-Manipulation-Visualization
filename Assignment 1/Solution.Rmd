@@ -1,8 +1,10 @@
 ---
-title: "Zikang_Assignment1"
-author: "Zikang Ge"
+title: "DATA*6200_Assignment1"
+author: "Zikang"
 date: "2024-10-01"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -23,7 +25,7 @@ library(maps)
 ```
 
 ```{r read data from excel}
-# Read the survey response
+# Read the survey response data.
 data <- read_xlsx("/Users/marlowe/Desktop/DATA*6200 Assignment 1/data/ask_a_manager.xlsx")
 ```
 
@@ -31,13 +33,15 @@ data <- read_xlsx("/Users/marlowe/Desktop/DATA*6200 Assignment 1/data/ask_a_mana
 
 ```{r rename columns}
 # Rename columns for easier reference.
-
 ## yoe refers to "Years of Experience"
 ## salary refers to "Annual Salary"
+
 colnames(data) <- c("time","age","industry","title","title_additinonal_context","salary","bonus","currency","other_currency","income_additional_context","country","us_state","city","overall_yoe","current_field_yoe","highest_edu","gender","race")
 ```
 
-To answer the three questions, multiple columns are required to be cleaned, such as "industry", "salary", "bonus", "currency", "other_currency"... \### Industry
+To answer the given questions, multiple columns are required to be pre-processed, such as "industry", "salary", "bonus", "currency", "other_currency"... 
+
+### Industry
 
 ```{r unique industry}
 # Check the unique value of the column "industry"
@@ -46,7 +50,7 @@ data |>
   unique()
 ```
 
-The result shows 1132 different results of industry description, but many of them are similar or even the same to each other. A good way to categorize them is through [North American Industry Classification System (NAICS)](https://www.census.gov/naics/?58967?yearbck=2022)
+The result shows more than a thousand different results of industry description, but many of them are similar or even the same to each other. A good way to categorize them is through [North American Industry Classification System (NAICS)](https://www.census.gov/naics/?58967?yearbck=2022)
 
 ```{r NAICS}
 naics <- dict("11" = "Natural", "21" = "Energy", "22" = "Utilities", "23" = "Construction", "31-33" = "Manufacturing", "42" = "Wholesale", "44-45" = "Retail", "48-49" = "Transportation", "51" = "IT", "52" = "Finance", "53" = "Estate", "54" = "Scientific", "55" = "Enterprise", "56" = "Administrative", "61" = "Education", "62" = "Medical", "71" = "Art", "72" = "Service", "81" = "Other", "92" = "Public")
@@ -58,16 +62,16 @@ naics <- dict("11" = "Natural", "21" = "Energy", "22" = "Utilities", "23" = "Con
 data <- data |>   # Convert strings in "industry" to lowercase for easier categorization.
   mutate(industry_lowercase = tolower(industry))
 
-data <- data |>   # Convert strings in 
+data <- data |>   # Convert strings in "title" to lowercase for easier categorization.
   mutate(title_lowercase = tolower(title))
 ```
 
 ```{r categorize industries}
-# Categorize the "industry_lowercase" column and the "title_additional_context_lowercase" column into "industry_code"
+# Make a new column "industry_category" by categorizing from column "industry_lowercase" and "title_lowercase".
 data <- mutate(data, industry_category = case_when(
   str_detect(industry_lowercase, "^agricul|^forest|^fish|^hunt") ~ " Natural",
   str_detect(title_lowercase, "^agricul|^forest|^fish|hunt") ~ "Natural",
-  
+  # This detects if the words in every cell of column "industry_lowercase" or "title_lowercase" starts with 'agircul', 'forest', 'fish' or 'hunt'. If it satisfies any of the requirements, it should be categorized into NAICS-11: Natural.
   str_detect(industry_lowercase, "^mining|^quarry|^oil|^gas") ~ "Energy",
   str_detect(title_lowercase, "^mining|^quarry|^oil|^gas") ~ "Energy",
   
@@ -125,30 +129,34 @@ data <- mutate(data, industry_category = case_when(
   TRUE ~ "Other")) #If none of the above suits the case, then it's categorized into "Other"
 ```
 
+> A potential limit of this method is uncertainty and ambiguity when categorizing terms like "Administrative manager of energy department". This is first caused by the limitation of the data. The column "industry" is collected from text input rather than multi-selections, so the interviewees can input anything they want, which would cause ambiguity for data cleaning. Secondly, this is caused by a natural attribute of human jobs that it has multiple categories, which is hard to categorize them into one single category.
+
 ### Salary
 
 ```{r compute total salary}
 data$salary[is.na(data$salary)] <- 0    # remove all the NA's
-data$bonus[is.na(data$bonus)] <- 0
+data$bonus[is.na(data$bonus)] <- 0      # remove all the NA's
 
-data <- data %>%  
-  mutate(total = as.numeric(salary) + as.numeric(bonus))  # Calculate the total salary
+data <- data |>  
+  mutate(total = as.numeric(salary) + as.numeric(bonus))  # Add a new column "total" by calculating the total salary. total = salary + bonus
 ```
 
-Convert the currency to US Dollars.
+Convert all kinds of currency into US Dollars for easier data analysis.
 
 ```{r unique currency}
 data |> 
   select(currency) |> 
-  unique()      # There are 11 different kinds of currency, with an "Other"
+  unique()              # There are 11 different kinds of currency, with an "Other"
+ 
 
+# Count the number of people who has "other" kind of currency, and calculate its proportion to the total data set.
 number_of_interviewees <- count(data)
 data |> 
   filter(currency == "Other") |> 
-  summarize(count = n(), proportion = n()/as.numeric(number_of_interviewees))
+  summarize(count = n(), proportion = n()/as.numeric(number_of_interviewees)) 
 ```
 
-Interviewees with "Other" kind of currency accout for approximately 0.6% of the data set, which is not supposed to have a huge affect on the analysis result.
+Interviewees with "Other" kind of currency account for approximately 0.6% of the data set, we assume it should not have a significant influence on later analysis. Even if it really has a significant influence (say, we have a billionaire who don't use any of the currency options listed), it will not contribute to the topic here, which is about the general situation of different industries.
 
 ```{r convert salary to USD}
 data <- mutate(data, total_salary_usd = case_when(
@@ -169,16 +177,19 @@ data <- mutate(data, total_salary_usd = case_when(
 ### Time
 
 ```{r year&month}
+data$time <- as.POSIXct(data$time, format = "%Y-%m-%d %H:%M:%S") # Format the "time" column for extraction.
 data <- data |> 
-    mutate(year = str_sub(time, 1, 4)) |> 
-    mutate(month = str_sub(time, 6, 7)) |> 
-    mutate(year_month = str_sub(time, 1, 7))
+    mutate(year = format(data$time, "%Y")) |>                    # Extract year
+    mutate(month = format(data$time, "%m")) |>                   # Extract month
+    mutate(year_month = format(data$time, "%Y-%m")) |>           # Extract year_month
+    mutate(year_month_day = format(data$time, "%Y-%m-%d"))       # Extract year_month_day
 ```
 
 ### Geography
-```{r filter the data to USA}
+
+```{r filter the data in USA}
 data_us <- data |> 
-    filter(is.na(us_state) != TRUE)
+    filter(is.na(us_state) != TRUE)     # Filter the interviewees in USA.
 ```
 
 ```{r sort states}
@@ -236,37 +247,60 @@ data_us <- data_us |>
         str_detect(us_state, "^Wyoming") ~ "Wyoming",
         TRUE ~ "Other"))
 ```
+
+This step might seems unnecessary but it for correcting the name of US states, because people have typos in their answers.
+
+```{r check other}
+# Check if there are unsorted terms.
+data_us |> 
+    select(states) |> 
+    unique()
+
+data_us |> 
+    filter(states == "Other") |> 
+    count()    # Check if there are unsorted states.
+```
+
 ## Industry with Highest/Lowest Salary
 
+From here, we start to answer the first question. "Which industry or industries have the highest/lowest salaries?"
+
 ```{r remove top and bottom 2.5% of the data}
-filtered_data <- data |>  # filtered_data means data with top2.5% and bottom 2.5% removed.
+filtered_data <- data |>      # filtered_data means data with top2.5% and bottom 2.5% removed.
   filter(currency != "Other" 
          & total_salary_usd >= quantile(data$total_salary_usd, 0.025, na.rm = TRUE) 
          & total_salary_usd <= quantile(data$total_salary_usd, 0.975, na.rm = TRUE))
 ```
 
-```{r}
+During the analysis process, some significantly unusual data with exceptionally high/low total salary is detected. So for the interpretability of the analysis result, the top 2.5% and bottom 2.5% of the data\$total_salary_usd are removed.
+
+```{r slice the highest/lowest salary industries}
 salary_summary <- filtered_data |> 
   select(industry_category, total_salary_usd) |> 
   group_by(industry_category) |> 
   summarise(mean_salary = mean(total_salary_usd)) |> 
   arrange(desc(mean_salary))
 
-salary_summary |> 
-    slice_max(mean_salary, n = 1) |>  
-    bind_rows( # Combine the two sliced result into one dataframe.
+top_bottom_2 <- salary_summary |> 
+    slice_max(mean_salary, n = 2) |>       # Check the highest 2 values
+    bind_rows(                             # Combine the two sliced rows into one data frame.
         salary_summary |> 
-            slice_min(mean_salary, n = 1))
+            slice_min(mean_salary, n = 2)) # Check the lowest 2 values
+
+top_bottom_2 |> 
+    arrange(desc(mean_salary))
 ```
 
-The analysis shows that among all the job categories of NAICS, jobs related to **IT**,**Computing** and **Technology** have the **highest** average annual salary of about *112k* USD.\
-On the other hand, jobs related to **administrative**, **support**, **waste management**, and **remediation Services**, has the **lowest** average annual salary of less than *54k* USD.
+The analysis shows that among all the job categories of NAICS, jobs related to ***IT***,***Computing*** and ***Technology*** have the **highest** average annual salary of about *112k* USD. And jobs related to ***energy*** and ***utilities*** have the second highest salary, on average.
+
+On the other side, jobs related to ***administrative***, ***support***, ***remediation Services***, or ***public***, ***library***, has the **lowest** average annual salary among all industries.
 
 # Section 2 Data Visualization
+From here, the second question "Which industries have the highest salary variability?" will be answered.
 
-## Industry with High Variability
+## Industry with Highest Variability
 
-```{r}
+```{r summarize the data by industries}
 summary_filtered_data <- filtered_data  |>  
   select(industry_category, total_salary_usd) |> 
   group_by(industry_category) |> 
@@ -280,7 +314,7 @@ summary_filtered_data <- filtered_data  |>
 
 ```{r variability}
 summary_filtered_data |> 
-    pivot_longer(cols = c(sd_salary, iqr_salary),
+    pivot_longer(cols = c(sd_salary, iqr_salary), # pivot the data longer
                  names_to = "statistic",
                  values_to = "value") |> 
     ggplot(aes(x = reorder(industry_category, -value),y = value)) +
@@ -289,39 +323,133 @@ summary_filtered_data |>
     labs(title = "Industry Statistics: Interquartile Range, Standard Deviation", 
          x = "Industry",
          y = "Value") +
+    scale_y_continuous(n.breaks = 10) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),   # Rotate x-axis labels
           text = element_text(size = 10))
 ```
 
-The result shows that among all the 20 industries, **IT**, **Wholesale**, **Medical**, **Utilities**, and **Finance** have the highest variability. These industries has the largest interquartile value and standard deviation, which indicates that salary of people working in these industries spreads over a wide range. \## Salaries Vary Over Time
+The interquartile range (IQR) measures the spread of middle 50% of the data, which is a great way to look into variability of a specific industry. And the standard deviation shows how the data of each industry vary from the mean value.
+
+The result shows that among all the 20 industries, **IT**, **Wholesale**, **Medical**, **Utilities**, and **Finance** have the highest variability. These industries has the largest interquartile value and standard deviation, which indicates that salary of people working in these industries spreads over a wide range. 
+
+However, this data set has a chronological attribute, which can be interpreted as how the salary fluctuated over a range of time (2021-2024). This means the data of each industry might not be symmetric, which may decrease the interpretability of standard deviation.
+
+In order to deal with this potential problem, we look at another metric, which the proportion between the lowest 25% and the highest 25% of the industries.
+
+
+```{r proportion}
+proportion_summary  <- filtered_data |> 
+    select(industry_category, total_salary_usd) |> 
+    group_by(industry_category) |> 
+    summarize(
+        top25_avg = mean(
+            total_salary_usd[total_salary_usd >= quantile(total_salary_usd, 0.75)]),
+        bot25_avg = mean(
+            total_salary_usd[total_salary_usd <= quantile(total_salary_usd, 0.25)]),
+        proportion = bot25_avg / top25_avg) |> 
+    arrange(desc(proportion))
+
+proportion_summary |> 
+    slice_max(proportion, n = 1) |>        # Check the highest 2 values
+    bind_rows(                             # Combine the two sliced rows into one data frame.
+        proportion_summary |> 
+            slice_min(proportion, n = 1))  # Check the lowest 2 values
+```
+This gives us a complete different view of the data set. Jobs related to ***Natural*** have the highest proportion value, which means that people with the highest salary in this industry don't each much more than people with low salary in this industry. Jobs related to ***Wholesale*** have the highest proportion value, which means people at the top of the industry earns much more than people at the bottom, specifically about 3 time more.
+
+Let's look more into the difference between the top industries and bottom industries.
+```{r bloxplot}
+condition = ifelse(filtered_data$industry_category %in% c("IT", "Administrative", "Natural", "Wholesale"), "highlight", "default")
+filtered_data |> 
+  ggplot(aes(x = industry_category, y = total_salary_usd,
+             fill = condition)) +
+    geom_boxplot(color = "grey30") +
+    labs(title = "Salary Distribution", 
+         subtitle = "Zoomed in for details",
+         x = "Job Category", 
+         y = "Salary (USD)") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+         text = element_text(size = 12),
+          plot.title = element_text(size = 14, face = "bold"),) + 
+    coord_cartesian(ylim = c(25000, 150000)) +  # Adjust this range to "zoom in"
+    scale_fill_manual(values = c("highlight" = "palegreen4", "default" = "lightblue"))
+```
+Notice the huge gap between job salaries in IT industry and Administrative Industry. Another thing that is worth mentioning is that notice the pattern "Natural" industry is almost indistinguishable, showing that the 0.75 quartile is almost the same as 0.25 quartile, which also supports the conclusion we found above that "Natural" jobs don't vary a lot in salary.
+
+> A potential limit of this graph is that it doesn't show how the salaries in "*Wholesale*" industry vary a lot. The top 25% people in Wholesale earns almost three times more than the bottom 25% average. And that is not showed here because the graph is zoomed in to ingore the unusually high salary data points for visability and interpretability.
 
 ##Salaries Vary Over Time and Geography
-### Vary Over Time
+
+From here, the third question "How do salaries vary over time and geography?" is answered.
+
+### Salaries Vary Over Time
+
+Before we dive into the question, we need to look into a problem in the data set.
+
+```{r count the data by year/month}
+# Count the data by year_month
+filtered_data |> 
+    select(year_month, total_salary_usd) |> 
+    group_by(year_month) |> 
+    summarize(count = n(),
+              mean = mean(total_salary_usd))
+```
+As the time gets closer to 2024, observations of salaries reported get less and less. We have about 20 categories of industry, but in some of the months listed, the data set only has 100 observations or even less! Can they fully represent the 20 industries? Clearly no, they can't even give a general evaluation of the whole society during that time period.
+
+Thus, in my opinion, it's not possible to look into how salaries vary over time from this data set, at least not accurately. However, we can still look into it to get a general view of the changes among time with the expectations of inaccuracy among data in later months.
+
 ```{r}
-salary_over_time <- filtered_data |> 
-    select(year, month, year_month, total_salary_usd) |> 
-    group_by(year, month, year_month) |> 
+over_time <- filtered_data |> 
+    select(year_month, year_month_day, industry_category, total_salary_usd) |>
+    group_by(year_month, industry_category) |> 
     summarize(average_salary = mean(total_salary_usd, na.rm = TRUE), .groups = "drop")
+
+over_time
 ```
 
 ```{r}
-salary_over_time |> 
-    ggplot(mapping = aes(x = as.yearmon(year_month), 
-                         y = average_salary)) +
-    geom_point(color = "black") + 
-    geom_line(color = "slategrey") +  
-    geom_smooth(method = "loess", se = FALSE, color = "lightblue")+
-    labs(title = "Average Salary Trend from April 2021 to September 2024",
+over_time <- filtered_data |> 
+    mutate(year_month = as.Date(paste0(year_month, "-01")))
+over_time |> 
+    select(year_month, industry_category, total_salary_usd) |> 
+    filter(industry_category %in% c("IT", "Scientific", "Medical", "Finance")) |>
+    group_by(year_month, industry_category,.groups = "drop") |> 
+    summarize(mean = mean(total_salary_usd)) |> 
+    ggplot(mapping = aes(x = year_month,
+                         y = mean,
+                         col = industry_category)) +
+    geom_point(color = "black", size = 0.3) + 
+    geom_line(color = "grey") +  
+    geom_smooth(method = "loess", se = FALSE)+
+    scale_x_date(date_breaks = "3 month", date_labels = "%Y-%m") +
+    scale_y_continuous(n.breaks = 7) +
+    labs(title = "Average Salary Trend from Apr 2021 to Sep 2024 of 4 Popular Industries",
+         subtitle = "Some industuries are omitted due to visability.",
          x = "Date",
-         y = "Average Salary (USD)")
-    theme(axis.text.x = element_text(angle = 30, hjust = 1),   # Rotate x-axis labels
-          text = element_text(size = 1))
+         y = "Average Salary (USD)", 
+         color = "Industry") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          plot.title = element_text(size = 12, face = "bold"),
+          text = element_text(size = 12))+
+    theme_minimal()
 ```
+From the graph we can see how the average salary of IT, Medical, and Scientific industry fluctuated during the pandemic. Also notice that how the Finance industry dropped at first but came back later, which can be a signal of how the global economy gradually recovered from the depression caused by pandemic.
 
--   [ ] **The month is not shown correctly**
-Shown by the graph, from the fitted approximation line, the average monthly salary remains stable between April 2021 and September 2024 except a decrease at early 2023, which was possibly caused by the pandemic. But after a few months, the average monthly salary went back to the normal level. However, it is also very obvious that the average monthly salary among all industries also becames more and more unstable as the time goes, which is shown by the fluctuation.
+However, with the problem of this data set being specified, when we look into all industries(the grey data points and lines), it is essential to keep in mind that the second half of the graph is not accurate at all compared to the first two months. The unnatural fluctuation and jittering also proves our observation of the data set is true.
 
 ### Vary Over Geography
+
+```{r}
+filtered_data |> 
+    select(country) |> 
+    group_by(country) |> 
+    summarize(count = n()) |> 
+    arrange(desc(count))
+```
+
+We can see that the majority of the interviewees in this survey come from United States, so we'll look into how salaries vary over United States.
+
 ```{r salary by state}
 data_us_filtered <- data_us |>
   filter(currency != "Other" 
@@ -334,66 +462,48 @@ us_summary <- data_us_filtered |>
     group_by(states) |> 
     summarise(mean_salary = mean(total_salary_usd, na.rm = TRUE)) |> 
     arrange(desc(mean_salary))
+us_summary
 ```
 
+```{r California}
+california_summary <- data_us_filtered |> 
+    filter(states == "California") |> 
+    group_by(industry_category) |> 
+    summarise(mean_salary = mean(total_salary_usd, na.rm = TRUE)) |> 
+    slice_max(mean_salary, n = 1) # Get the industry with the highest salalry in California
+california_summary
+```
 
 ```{r}
-us_map <- map_data("state")
+us_map <- map_data("state")                           # Choose map
 
-us_summary$states <- tolower(us_summary$states) # Convert to lowercase to match the map library
+us_summary$states <- tolower(us_summary$states)       # Convert lowercase to match the map
 
 us_map_summary <- us_map |> 
   left_join(us_summary, by = c("region" = "states"))
 
+label_position <- data.frame(
+  state = "California",
+  long = -119.4179,                                   # Longitude for California
+  lat = 36.7783,                                      # Latitude for California
+  label = "IT")
+
 us_map_summary |> 
     ggplot(aes(x = long, y = lat,
-           group = group,
-           fill = mean_salary)) +
-    geom_polygon(color = "white") +  # Add state borders
-    coord_fixed(1.4) +  # Fix aspect ratio
-    labs(title = "Average Salary by State", fill = "Average Salary (USD)") +
-    theme_minimal() +  # Remove background and gridlines
-    scale_fill_gradient(low = "snow", high = "steelblue4")
+           group = us_map_summary$group,
+           fill = us_map_summary$mean_salary)) +
+    geom_polygon(color = "white") +                   # Add state borders
+    coord_fixed(1.4) +                                # Fix aspect ratio
+    labs(x = "Longtitude",
+         y = "Latitude", 
+         title = "Average Salary by State",
+         subtitle = "Alaska is omitted here.",
+         fill = "Average Salary (USD)",
+         caption = "IT has the highest average salary in California") +
+    theme_minimal() +  # Remove background and grid lines.
+    scale_fill_gradient(low = "snow", high = "darkgreen") +
+    geom_text(data = label_position, aes(x = long, y = lat, label = label), 
+              color = "snow", size = 3, fontface = "bold",inherit.aes = FALSE)
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-boxplot
-
-```{r}
-data |> 
-  select(industry_category, total_salary_usd,currency) |> 
-  filter(currency != "Other") |>  
-  ggplot(aes(x =  industry_category, y = total_salary_usd))+
-    geom_boxplot() +
-    labs(title = "Salary Distribution by Industry", x = "Industry Code", y = "Salary (USD)") +  
-    theme(text=element_text(size = 12))
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+> Possible improvement: add labels for every states showing the industry wiht highest salaries in that state. 
