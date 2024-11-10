@@ -1,0 +1,506 @@
+---
+title: "6200 Project 2"
+author: "Zikang Ge"
+date: "2024-11-03"
+output: html_document
+execute: 
+  embed-resources: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+
+```{r load packages}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(rvest)
+library(sf)
+library(geodata)
+library(raster)
+library(lubridate)
+library(terra)
+library(fields)
+library(httr)
+library(jsonlite)
+```
+
+# Data Scraping (Q1)
+
+```{r data scraping}
+# Scrap wildfire data from 2012 to 2017 from BC government website.
+historical = read_html("https://www2.gov.bc.ca/gov/content/safety/wildfire-status/about-bcws/wildfire-statistics")
+
+historical <- historical |> 
+    html_table(fill = TRUE)
+
+historical <- as_tibble(historical[[1]])
+
+historical <- historical |> 
+    arrange(Year)
+
+head(historical)
+```
+
+# Temperature and Elevation data (Q2)
+
+## Preparation
+
+```{r bc_boundary}
+download_path <- "/Users/marlowe/Desktop/DATA-6200-Data-Manipulation-Visualization/Assignment 2"
+provinces <- st_as_sf(geodata::gadm("CAN", level = 1, download = TRUE, path = download_path))
+bc_boundary <- provinces[provinces$NAME_1 == "British Columbia", ]
+plot(bc_boundary$geometry)
+```
+
+```{r download}
+# Download temperature data and elevation data from geodata package
+temperature_data <- worldclim_country(
+    country = "CAN",
+    var = "tmax",
+    res = "2.5",
+    lon = -126, lat = 53,
+    version = "2.1",
+    path = download_path)
+
+elevation_data <- elevation_30s(country = "CAN", region = bc_boundary, path = download_path)
+```
+
+Since high temperature generally contribute more to dry environment and potentially more wildfires, I chose to download the max temperature data (see the argument `var = "tmax"`.
+
+```{r crop & mask}
+# Crop and mask temperature data and elevation data
+month_names <- month.abb   # Abbreviations for months Jan, Feb, ..., Dec
+names(temperature_data) <- month_names
+
+temperature_cropped <- crop(temperature_data, extent(bc_boundary))
+temperature_masked <- mask(temperature_cropped, bc_boundary)
+
+elevation_cropped <- crop(elevation_data, extent(bc_boundary))
+elevation_masked <- mask(elevation_cropped, bc_boundary)
+```
+
+## Temperature Data Visualization
+
+```{r plot temperature data}
+# Plot layout
+par(mfrow = c(3, 4),oma = c(0, 0, 6, 0)) 
+
+for (i in 1:12) {
+  plot(temperature_masked[[i]], main = paste(month_names[i]))
+}
+
+mtext("Average Monthly Temperature", outer = TRUE, cex = 1.5, line = 2)
+mtext("Temperature data across British Columbia for 2012-2017", outer = TRUE, cex = 1, line = 0)
+```
+
+## Elevation Data Visualization
+
+```{r plot elevation data}
+plot(elevation_masked, main = "Elevation Data for British Columbia")
+```
+
+# Historical Wildfire Distribution (Q3)
+
+## Wildfire Data Points
+
+```{r wildfire data points}
+names(historical) <- c("year", "fire_number", "fire_centre", "latitude", "longitude", "geographic", "discovery_date", "size")
+
+convert_to_double <- function(str) {
+
+  parts <- str_split(str, " ") |>  unlist() # Split into degrees and minutes
+  
+  degrees <- as.numeric(parts[1])
+  minutes <- as.numeric(parts[2])
+  
+  float <- degrees + minutes / 60
+  return(float)
+}
+
+# Convert latitude and longitude column to doubles
+historical <- historical |> 
+  mutate(
+    latitude = sapply(latitude, convert_to_double),
+    longitude = sapply(longitude, convert_to_double),
+    longitude = -longitude)
+
+historical <- historical |> 
+  mutate(
+    month = str_extract(discovery_date, "\\b[A-Za-z]+\\b"),           # Extract first word -> month
+    month = factor(month, levels = month.name, labels = month.abb))   # convert month to abbreviations
+```
+
+## Distribution Over Months
+
+```{r plot wildfire distribution over temperature}
+# Set up plot layout
+par(mfrow = c(3, 4),oma = c(0, 0, 5, 0)) 
+
+for (i in 1:12) {
+  month_name <- month.abb[i] # Abbreviation
+
+  # Filter fire data for the month in current loop
+  fire_data_month <- historical |> 
+    filter(month == month_name)
+  if (nrow(fire_data_month) > 0) {
+    fire_data_month_sf <- st_as_sf(fire_data_month, coords = c("longitude", "latitude"), crs = 4326)
+    fire_data_month_sf <- st_transform(fire_data_month_sf, crs = st_crs(temperature_masked))
+    
+    plot(temperature_masked[[i]], main = paste(month_name), alpha = 1)
+    plot(st_geometry(fire_data_month_sf), add = TRUE, col = "red", pch = 20, cex = 0.2)
+  } else { # If there are no fire data points for the month, only plot the temperature
+    plot(temperature_masked[[i]], main = paste(month_name), alpha = 1)
+    text(0, 0, labels = paste("No fires in", month_name), cex = 1.5, col = "black")
+  }
+}
+
+mtext("Wildfire Distribution over Temperature", outer = TRUE, cex = 1.5, line = 2)
+```
+
+As the graph shows, wildfires tends to occur more frequently when the temperature is higher, which is in summer. Here's another graph that shows how the number of wildfires vary over months.
+
+```{r plot wildfire counts by month}
+fire_counts_by_month <- historical |>
+  group_by(month) |>
+  summarize(count = n()) |>
+  complete(month = month.abb, fill = list(count = 0)) |>
+  mutate(month = factor(month, levels = month.abb))
+
+# Plot bar chart of wildfire counts by month
+par(mfrow = c(1, 1))
+barplot(
+  fire_counts_by_month$count[order(fire_counts_by_month$month)], 
+  names.arg = month.abb,
+  col = "orange", 
+  xlab = "Month", 
+  ylab = "Number of Wildfires", 
+  main = "Wildfire Counts by Month",
+  ylim = c(0, max(fire_counts_by_month$count) * 1.05))
+```
+
+Wildfires occurs the most between April and August.
+
+```{r focus on months with more wildfire}
+# Set up plot layout
+par(mfrow = c(2, 3), oma = c(0, 0, 6, 0)) 
+
+for (i in 4:9) {
+  month_name <- month.abb[i] # Abbreviation
+
+  # Filter fire data for the month in current loop
+  fire_data_month <- historical |> 
+    filter(month == month_name)
+  if (nrow(fire_data_month) > 0) {
+    fire_data_month_sf <- st_as_sf(fire_data_month, coords = c("longitude", "latitude"), crs = 4326)
+    fire_data_month_sf <- st_transform(fire_data_month_sf, crEs = st_crs(temperature_masked))
+    
+    plot(temperature_masked[[i]], main = paste(month_name), alpha = 1)
+    plot(st_geometry(fire_data_month_sf), add = TRUE, col = "red", pch = 20, cex = 0.3)
+  } else { # If there are no fire data points for the month, only plot the temperature
+    plot(temperature_masked[[i]], main = paste(month_name), alpha = 1)
+    text(0, 0, labels = paste("No fires in", month_name), cex = 1.5, col = "black")
+  }
+}
+mtext("Wildfire Distribution over Specific Months", outer = TRUE, cex = 1.5, line = 2)
+```
+
+## Distribution Over Years
+
+The mean temperature across British Columbia has increased by 1.9°C between 1948 and 2016 ([source](https://www.davey.com/media/brgj0k3h/ca-british-columbia-projections-623.pdf)), which is not noticeable on the plot. We assume that annual average temperature of Britith Columbia didn't change at all between 2012 and 2017, and plot wildfire data points on each year.
+
+> Here I want to mention a limitation of this portion of data from geodata package. The temperature raster data has 12 layers, each representing a corresonding month. However, it doesn't have an "year" attribute, which means annual average of each year can not be computed from this data set, the data of 12 months is probably observed among years to get an average temperature for each month at each location.
+
+> This limitation can be dealt with by accessing other functions in geodata to get data among years, however for some reason I got the error saying it exceeds my 16gb RAM, which is the main reason why I'm approximating annual temperature data without calculating it from the dataset.
+
+```{r plot wildfire counts over years}
+# Set up a 2x3 grid of subplots (for 6 graphs)
+par(mfrow = c(2, 3), mar = c(4, 4, 2, 1), oma = c(0, 0, 6, 0))
+
+# Loop over each year (2012 to 2017)
+for (i in 2012:2017) {
+  month_name <- month.abb  # Month abbreviations
+
+  # Filter fire data for the current year
+  fire_data_year <- historical |> 
+    filter(year == i)
+
+  avg_temp_layer <- temperature_masked[[7]]
+
+  plot(avg_temp_layer, main = paste(i), alpha = 1)
+
+  if (nrow(fire_data_year) > 0) {
+    fire_data_year_sf <- st_as_sf(fire_data_year, coords = c("longitude", "latitude"), crs = 4326)
+    fire_data_year_sf <- st_transform(fire_data_year_sf, crs = st_crs(temperature_masked))
+    
+    plot(st_geometry(fire_data_year_sf), add = TRUE, col = "red", pch = 20, cex = 0.5)
+  } else { # if there is no wildfire
+    text(0, 0, labels = "No fires", cex = 1.5, col = "black")
+  }
+}
+mtext("Wildfire Distribution over Years", outer = TRUE, cex = 1.5, line = 2)
+```
+
+From the result, the conclusion can be drawn that there is a tendency for the wildfires to occur more at the south and/or east side of the province among these years.
+
+# Temperature & Elevation Impact on Fire Occurrence (Q4) 
+
+## Temperature Impact
+
+```{r attach tempetature to historical data}
+month_to_layer <- setNames(1:12, month.abb)
+
+# Add a column to `historical` for the corresponding layer index based on the month
+historical <- historical |> 
+  mutate(layer_index = month_to_layer[month])
+
+# Extract temperature values for each wildfire based on location and month layer
+historical <- historical |> 
+  rowwise() |> 
+  mutate(
+    temperature = extract(temperature_masked[[layer_index]], cbind(longitude, latitude))[[1]]
+  ) |> 
+  ungroup()
+```
+
+```{r plot wildfire count by temperature}
+historical_temp <- historical |> 
+  mutate(temp_rounded = round(temperature, digits = 0)) |>   # Round to the nearest integer
+  filter(!is.na(temp_rounded))                               # Remove rows where temp_rounded is NA
+
+wildfire_counts <- historical_temp |> 
+  group_by(temp_rounded) |> 
+  summarize(wildfire_count = n())
+
+ggplot(wildfire_counts, aes(x = temp_rounded, y = wildfire_count)) +
+  geom_bar(stat = "identity", fill = "orange", color = "black") +
+  labs(
+    title = "Wildfire Count by Temperature",
+    x = "Temperature (°C)",
+    y = "Wildfire Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(
+      from = min(wildfire_counts$temp_rounded, na.rm = TRUE), 
+      to = max(wildfire_counts$temp_rounded, na.rm = TRUE), 
+      by = 1
+    )
+  ) +
+  scale_y_continuous(
+    breaks = seq(
+      from = min(0), 
+      to = max(105), 
+      by = 10
+    )
+  ) +
+  theme_minimal()
+```
+
+The graph suggests that generally, as monthly average temperature goes up, the occurrence of wildfire also become more frequently, this is especially obvious below 22°C. However, also notice that when average monthly temperature goes above 23°C, the occurrence of wildfire decreases. This unusual phenomenon can possibly be caused by: 
+
+1. There are other factors that affects the occurrence of wildfire, for example, human activity, and potentially, elevation.
+2. BC is a province with very mild whether, which means the average monthly temperature rarely goes above 23°C (actually the highest monthly average temperature of BC in July is an exact 23°C, [source](https://weatherspark.com/y/476/Average-Weather-in-Vancouver-British-Columbia-Canada-Year-Round)). So this can be a naturally result of the data itself.
+
+## Elevation Impact
+
+```{r attach elevation data to historical}
+historical_sf <- st_as_sf(historical, coords = c("longitude", "latitude"), crs = 4326)
+
+# Convert historical data (sf object) to a SpatVector
+historical_spat <- vect(historical_sf)
+
+# Extract elevation values from the raster and add them to historical data
+historical$elevation <- extract(elevation_masked, historical_spat)[, 2]
+```
+
+```{r plot wildfire count by elevation}
+historical_df <- as.data.frame(historical)
+# Round elevation and remove NAs
+historical_elev <- historical_df |> 
+  mutate(elevation_rounded = floor(elevation / 100) * 100) |>   # Bin elevation in 50 meter intervals
+  filter(!is.na(elevation_rounded))
+
+# Count the number of wildfires for each elevation level
+wildfire_counts_elevation <- historical_elev |> 
+  group_by(elevation_rounded) |> 
+  summarize(wildfire_count = n())
+
+# Plot the wildfire count against elevation
+ggplot(wildfire_counts_elevation, aes(x = elevation_rounded, y = wildfire_count)) +
+  geom_bar(stat = "identity", fill = "steelblue", color = "black") +
+  labs(
+    title = "Wildfire Count by Elevation",
+    x = "Elevation Interval (m)",
+    y = "Wildfire Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(
+      from = min(wildfire_counts_elevation$elevation_rounded, na.rm = TRUE), 
+      to = max(wildfire_counts_elevation$elevation_rounded, na.rm = TRUE), 
+      by = 200
+    )) +
+  scale_y_continuous(
+    breaks = seq(
+      from = min(0), 
+      to = max(150), 
+      by = 10
+    ))+
+  theme_minimal()
+```
+
+The graph shows that among all possible elevation intervals, wildfire tend to occur the most when the elevation is between 400 meters and 1000 meters, considering that average elevation of the while British Columbia province is actually 708 meters ([source](https://en-ca.topographic-map.com/map-h5157/British-Columbia/)), this is actually a reasonable result.
+
+- For elevation below 400 meters, wildfire tends to occur less than between 400 and 1000 meters. That could be resulted from higher humidity in these areas, or some other natural attributes of this area that limits the condition for wildfire.
+
+- For elevation above 1000 meters, wildfire tends to occur less than between 400 and 1000 meters. That could be resulted from lower temperature from these areas, higher average wind speed or some other factors.
+
+But generally speaking, assume that the impact of humidity and temperature/wind speed is significant to the occurrence of wildfire, the conclusion is still obvious that wildfire tends to happen in lower elevation areas.
+
+# Comparison between Historical Data and Current Data
+
+```{r get current data}
+# Define the ArcGIS REST API URL with query parameters
+url <- "https://services6.arcgis.com/ubm4tcTYICKBpist/arcgis/rest/services/BCWS_ActiveFires_PublicView/FeatureServer/0/query"
+
+# Set query parameters for the API call
+params <- list(
+  where = "1=1",    # Selects all records
+  outFields = "*",  # Requests all fields
+  f = "geojson"     # Requests the response in GeoJSON format for spatial data
+)
+
+response <- GET(url, query = params)
+
+if (http_status(response)$category == "Success") {
+  # Parse the GeoJSON response content
+  data_geojson <- content(response, as = "text")
+  current_fires <- st_read(data_geojson, quiet = TRUE)
+} else {
+  stop("Failed to retrieve data from the API.")
+}
+
+current_fires <- current_fires %>%
+  mutate(IGNITION_DATE = as.POSIXct(IGNITION_DATE / 1000, origin = "1970-01-01", tz = "UTC"))
+```
+
+```{r current wildfire over elevation}
+plot(elevation_masked, main = "Current Wildfire over Elevation")
+
+plot(st_geometry(current_fires$geometry), add = TRUE, col = "red", pch = 20, cex = 0.5)
+```
+From this graph, compared to the graph above that shows how wildfire distribution vary over years between 2012-2017, a summary can be made that there is a tendency for wildfire to occur more and more in the south east area, which is also the area with relatively higher elevation. Let's check this fact even more.
+
+```{r}
+current_sf <- st_as_sf(current_fires, coords = c("longitude", "latitude"), crs = 4326)
+
+# Convert historical data (sf object) to a SpatVector
+current_spat <- vect(current_sf)
+
+# Extract elevation values from the raster and add them to historical data
+current_fires$elevation <- extract(elevation_masked, current_spat)[, 2]
+
+
+current_df <- as.data.frame(current_fires)
+current_elev <- current_df |> 
+  mutate(elevation_rounded = floor(elevation / 100) * 100) |>   # Bin elevation in 50 meter intervals
+  filter(!is.na(elevation_rounded))
+
+wildfire_counts_elevation <- current_elev |> 
+  group_by(elevation_rounded) |> 
+  summarize(wildfire_count = n())
+
+ggplot(wildfire_counts_elevation, aes(x = elevation_rounded, y = wildfire_count)) +
+  geom_bar(stat = "identity", fill = "steelblue", color = "black") +
+  labs(
+    title = "Wildfire Count by Elevation",
+    x = "Elevation Interval (m)",
+    y = "Wildfire Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(
+      from = min(wildfire_counts_elevation$elevation_rounded, na.rm = TRUE), 
+      to = max(wildfire_counts_elevation$elevation_rounded, na.rm = TRUE), 
+      by = 200
+    )) +
+  scale_y_continuous(
+    breaks = seq(
+      from = min(0), 
+      to = max(150), 
+      by = 10
+    ))+
+  theme_minimal()
+```
+
+from this graph a different pattern can be seen compared to the graph plotted from historical data. Wildfires are moving from lower elevation area to higher elevation area. In 2024, wildfire occur the most in areas with elevation between 600 meters and 1400 meters, which is significantly higher than 400 to 1000 meters as we saw before.
+
+Now let's check the difference between historical wildfire and current wildfire in terms of temperature.
+
+```{r attach temperature to current fire data}
+current_fires <- st_as_sf(current_fires)
+
+current_fires <- current_fires |> 
+  mutate(
+    coords = st_coordinates(geometry),  # Extract coordinates from geometry
+    longitude = coords[, 1],            # Assign longitude
+    latitude = coords[, 2]              # Assign latitude
+  )
+
+current_fires <- current_fires |> 
+  mutate(month = month(ymd_hms(IGNITION_DATE)))
+
+month_to_layer <- setNames(1:12, month.abb)
+
+current_fires <- current_fires |> 
+  mutate(layer_index = month_to_layer[month])
+
+current_fires <- current_fires |> 
+    filter(!is.na(month))
+
+current_fires <- current_fires |> 
+  rowwise() |> 
+  mutate(
+    temperature = extract(temperature_masked[[layer_index]], cbind(longitude, latitude))[[1]]
+  ) |> 
+  ungroup()
+```
+```{r}
+current_temp <- current_fires |> 
+  mutate(temp_rounded = round(temperature, digits = 0)) |>   # Round to the nearest integer
+  filter(!is.na(temp_rounded))                               # Remove rows where temp_rounded is NA
+
+wildfire_counts <- current_temp |> 
+  group_by(temp_rounded) |> 
+  summarize(wildfire_count = n())
+
+ggplot(wildfire_counts, aes(x = temp_rounded, y = wildfire_count)) +
+  geom_bar(stat = "identity", fill = "orange", color = "black") +
+  labs(
+    title = "Wildfire Count by Temperature (2024)",
+    x = "Temperature (°C)",
+    y = "Wildfire Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(
+      from = min(wildfire_counts$temp_rounded, na.rm = TRUE), 
+      to = max(wildfire_counts$temp_rounded, na.rm = TRUE), 
+      by = 1
+    )
+  ) +
+  scale_y_continuous(
+    breaks = seq(
+      from = min(0), 
+      to = max(150), 
+      by = 20
+    )
+  ) +
+  theme_minimal()
+```
+
+Compare between the two graphs, it is obvious that wildfires now happen more between 16°C and 24°C, this is different from historical wildfire data. However, the fact that there were wildfire that occurred at super low temperature or when temperature is higher than 25, may still be caused by other factors like human activity or lack of data points.
+
+> Last thing I want to mention about the data itself, is about the Y-axis of the two graphs here. The number of data points sum up to about 1000, which is not possible in my opinion. There can't be 1000 wildfire in British Columbia in 2024. So all the analysis of the last section was done with the assumption that the data set contains different observations of each wildfire.
+
+> However, this can be considered as advantange too, because this will give a very detailed pattern of wildfire situation in year 2024, and I was comparing the general pattern to the historical data, not the numbers, so the issue of current data set doesn't affect my conclusion.
